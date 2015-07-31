@@ -1,6 +1,8 @@
 {-# LANGUAGE DataKinds             #-}
+{-# LANGUAGE KindSignatures        #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TemplateHaskell       #-}
+{-# LANGUAGE TypeFamilies          #-}
 module Network.Kafka.Primitive.Produce where
 import qualified Data.Vector as V
 import           Network.Kafka.Exports

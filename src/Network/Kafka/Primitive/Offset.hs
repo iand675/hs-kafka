@@ -1,6 +1,8 @@
 {-# LANGUAGE DataKinds             #-}
+{-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TemplateHaskell       #-}
+{-# LANGUAGE TypeFamilies          #-}
 module Network.Kafka.Primitive.Offset where
 import qualified Data.Vector as V
 import           Network.Kafka.Exports

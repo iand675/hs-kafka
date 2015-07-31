@@ -3,7 +3,10 @@
 {-# LANGUAGE RankNTypes             #-}
 module Network.Kafka.Fields where
 import Control.Applicative
+import Data.Functor.Contravariant
+import Data.Profunctor
 
+type Getter s a = forall f. (Contravariant f, Functor f) => (a -> f a) -> s -> f s
 type Lens s t a b = forall f. Functor f => (a -> f b) -> s -> f t
 type Lens' s a = Lens s s a a
 
@@ -18,7 +21,7 @@ newtype Id a = Id { runId :: a }
 instance Functor Id where fmap f = Id . f . runId
 
 -- | Get the @a@ inside the @s@.
-view :: Lens s t a b -> s -> a
+view :: Getter s a -> s -> a
 view l = getConst . l Const
 
 -- | Modify the @a@ inside the @s@, optionally changing the types to
@@ -30,6 +33,10 @@ over l f = runId . l (Id . f)
 -- and @t@.
 set :: Lens s t a b -> b -> s -> t
 set l a = runId . l (Id . const a)
+
+to :: (Profunctor p, Contravariant f) => (s -> a) -> p a (f a) -> p s (f s)
+to k = dimap k (contramap k)
+{-# INLINE to #-}
 
 class HasReplicaId s a | s -> a where
   replicaId :: Lens' s a
@@ -114,4 +121,46 @@ class HasCoordinatorHost s a | s -> a where
 
 class HasCoordinatorPort s a | s -> a where
   coordinatorPort :: Lens' s a
+
+class HasPartitions s a | s -> a where
+  partitions :: Lens' s a
+
+class HasMessage s a | s -> a where
+  message :: Lens' s a
+
+class HasAttributes s a | s -> a where
+  attributes :: Lens' s a
+
+class HasKey s a | s -> a where
+  key :: Lens' s a
+
+class HasValue s a | s -> a where
+  value :: Lens' s a
+
+class HasCrc s a | s -> a where
+  crc :: Lens' s a
+
+class HasMagicByte s a | s -> a where
+  magicByte :: Lens' s a
+
+class HasCommits s a | s -> a where
+  commits :: Lens' s a
+
+class HasMetadata s a | s -> a where
+  metadata :: Lens' s a 
+
+class HasResults s a | s -> a where
+  results :: Lens' s a
+
+class HasTimestamp s a | s -> a where
+  timestamp :: Lens' s a
+
+class HasGeneration s a | s -> a where
+  generation :: Lens' s a
+
+class HasConsumer s a | s -> a where
+  consumer :: Lens' s a
+
+class HasRetentionTime s a | s -> a where
+  retentionTime :: Lens' s a
 

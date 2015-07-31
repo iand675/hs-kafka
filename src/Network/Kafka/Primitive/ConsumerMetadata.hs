@@ -1,6 +1,9 @@
 {-# LANGUAGE DataKinds             #-}
+{-# LANGUAGE DeriveGeneric         #-}
+{-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TemplateHaskell       #-}
+{-# LANGUAGE TypeFamilies          #-}
 module Network.Kafka.Primitive.ConsumerMetadata where
 import qualified Data.Vector as V
 import           Network.Kafka.Exports

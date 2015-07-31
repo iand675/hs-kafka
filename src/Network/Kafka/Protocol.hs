@@ -1,4 +1,7 @@
 {-# LANGUAGE DataKinds             #-}
+{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE KindSignatures        #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 module Network.Kafka.Protocol where
 import           Control.Monad
@@ -11,6 +14,13 @@ import           GHC.TypeLits
 import           Network.Kafka.Types
 import           Network.Simple.TCP hiding (send)
 import qualified Network.Socket.ByteString.Lazy as Lazy
+import           Network.Kafka.Primitive.ConsumerMetadata
+import           Network.Kafka.Primitive.Fetch
+import           Network.Kafka.Primitive.Metadata
+import           Network.Kafka.Primitive.Offset
+import           Network.Kafka.Primitive.OffsetCommit
+import           Network.Kafka.Primitive.OffsetFetch
+import           Network.Kafka.Primitive.Produce
 
 req :: CorrelationId -> Utf8 -> RequestMessage a v -> Request a v
 req = Request
@@ -44,3 +54,4 @@ send c req = do
   case runGetOrFail get left of
     Left (_, _, err) -> error err
     Right (rest, _, x) -> writeIORef (kafkaLeftovers c) rest >> return x
+

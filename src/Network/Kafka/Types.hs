@@ -3,6 +3,7 @@
 {-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE RankNTypes                 #-}
 {-# LANGUAGE StandaloneDeriving         #-}
 {-# LANGUAGE TypeFamilies               #-}
@@ -16,7 +17,7 @@ import qualified Data.ByteString as BS
 import           Data.Int
 import qualified Data.Vector as V
 import qualified Data.Vector.Generic as G
-import           GHC.Generics
+import           GHC.Generics hiding (to)
 import           GHC.TypeLits
 import           Network.Kafka.Exports
 import           Network.Kafka.Fields
@@ -169,7 +170,23 @@ data CompressionCodec = NoCompression
 
 
 newtype Attributes = Attributes { attributesCompression :: CompressionCodec }
+instance ByteSize Attributes where
+  byteSize = const 1
 
+instance Binary Attributes where
+  get = do
+    x <- get :: Get Int8
+    return $ Attributes $! case x of
+      0 -> NoCompression
+      1 -> GZip
+      2 -> Snappy
+      _ -> error "Unsupported compression codec"
+  put (Attributes c) = do
+    let x = case c of
+          NoCompression -> 0
+          GZip          -> 1
+          Snappy        -> 2
+    put (x :: Int8)
 
 data family RequestMessage p (v :: Nat)
 data family ResponseMessage p (v :: Nat)
@@ -190,10 +207,85 @@ data Message = Message
   , messageValue      :: !ByteString
   }
 
-data MessageSet = MessageSet
-  { messageSetOffset   :: !Int64
-  , messageSetMessages :: !(V.Vector Message)
+instance ByteSize Message where
+  byteSize m = byteSizeL crc m +
+               byteSizeL magicByte m +
+               byteSizeL attributes m +
+               byteSizeL key m +
+               byteSizeL value m
+  {-# INLINE byteSize #-}
+
+instance Binary Message where
+  get = Message <$> get <*> get <*> get <*> get <*> get
+  put p = do
+    putL crc p
+    putL magicByte p
+    putL attributes p
+    putL key p
+    putL value p
+
+instance HasCrc Message Int32 where
+  crc = lens messageCrc (\s a -> s { messageCrc = a })
+  {-# INLINEABLE crc #-}
+
+instance HasMagicByte Message Int8 where
+  magicByte = lens messageMagicByte (\s a -> s { messageMagicByte = a })
+  {-# INLINEABLE magicByte #-}
+
+instance HasAttributes Message Attributes where
+  attributes = lens messageAttributes (\s a -> s { messageAttributes = a })
+  {-# INLINEABLE attributes #-}
+
+instance HasKey Message ByteString where
+  key = lens messageKey (\s a -> s { messageKey = a })
+  {-# INLINEABLE key #-}
+
+instance HasValue Message ByteString where
+  value = lens messageValue (\s a -> s { messageValue = a })
+  {-# INLINEABLE value #-}
+
+data MessageSetItem = MessageSetItem
+  { messageSetItemOffset  :: !Int64
+  , messageSetItemMessage :: !Message
   }
+
+instance Binary MessageSetItem where
+  get = do
+    o <- get
+    s <- get :: Get Int32
+    m <- isolate (fromIntegral s) get
+    return $ MessageSetItem o m
+  {-# INLINE get #-}
+  put i = do
+    putL offset i
+    putL (message . to byteSize) i
+    putL message i
+  {-# INLINE put #-}
+
+instance ByteSize MessageSetItem where
+  byteSize m = byteSizeL offset m + byteSizeL message m
+  {-# INLINE byteSize #-}
+
+instance HasOffset MessageSetItem Int64 where
+  offset = lens messageSetItemOffset (\s a -> s { messageSetItemOffset = a })
+  {-# INLINEABLE offset #-}
+
+instance HasMessage MessageSetItem Message where
+  message = lens messageSetItemMessage (\s a -> s { messageSetItemMessage = a })
+  {-# INLINEABLE message #-}
+
+newtype MessageSet = MessageSet
+  { messageSetMessages :: V.Vector MessageSetItem
+  }
+
+instance ByteSize MessageSet where
+  byteSize = V.sum . V.map byteSize . messageSetMessages
+
+getMessageSet :: Int32 -> Get MessageSet
+getMessageSet c = MessageSet <$> V.replicateM (fromIntegral c) get
+
+putMessageSet :: MessageSet -> Put
+putMessageSet = V.mapM_ put . messageSetMessages
 
 data PartitionMessages = PartitionMessages
   { partitionMessagesPartition :: !PartitionId
@@ -203,11 +295,12 @@ data PartitionMessages = PartitionMessages
 
 
 newtype GenerationId = GenerationId Int32
+  deriving (Show, Binary, ByteSize)
+
 newtype RetentionTime = RetentionTime Int64
+  deriving (Show, Binary, ByteSize)
 
-
-
-putL :: Binary a => Lens s t a b -> s -> Put
+putL :: Binary a => Getter s a -> s -> Put
 putL l = put . view l
 
 data Request a v = Request
@@ -287,3 +380,4 @@ instance (KnownNat v, ByteSize (RequestMessage a v)) => ByteSize (Request a v) w
                byteSize (requestCorrelationId p) +
                byteSize (requestClientId p) +
                byteSize (requestMessage p)
+

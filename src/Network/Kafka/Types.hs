@@ -152,6 +152,7 @@ newtype ConsumerId = ConsumerId { fromConsumerId :: Utf8 }
 newtype Utf8 = Utf8 { fromUtf8 :: ByteString }
   deriving (Show, Eq)
 
+
 instance Binary Utf8 where
   get = do
     len <- fromIntegral <$> getWord16be
@@ -163,6 +164,18 @@ instance Binary Utf8 where
 instance ByteSize Utf8 where
   byteSize (Utf8 bs) = 2 + (fromIntegral $ BS.length bs)
 
+newtype Bytes = Bytes { fromBytes :: ByteString }
+
+instance Binary Bytes where
+  get = do
+    len <- fromIntegral <$> getWord32be
+    Bytes <$> getByteString len
+  put (Bytes bs) = do
+    putWord32be $ fromIntegral $ BS.length bs
+    putByteString bs
+
+instance ByteSize Bytes where
+  byteSize (Bytes bs) = 4 + (fromIntegral $ BS.length bs)
 
 data CompressionCodec = NoCompression
                       | GZip
@@ -203,8 +216,8 @@ data Message = Message
   { messageCrc        :: !Int32
   , messageMagicByte  :: !Int8
   , messageAttributes :: !Attributes
-  , messageKey        :: !ByteString
-  , messageValue      :: !ByteString
+  , messageKey        :: !Bytes
+  , messageValue      :: !Bytes
   }
 
 instance ByteSize Message where
@@ -236,11 +249,11 @@ instance HasAttributes Message Attributes where
   attributes = lens messageAttributes (\s a -> s { messageAttributes = a })
   {-# INLINEABLE attributes #-}
 
-instance HasKey Message ByteString where
+instance HasKey Message Bytes where
   key = lens messageKey (\s a -> s { messageKey = a })
   {-# INLINEABLE key #-}
 
-instance HasValue Message ByteString where
+instance HasValue Message Bytes where
   value = lens messageValue (\s a -> s { messageValue = a })
   {-# INLINEABLE value #-}
 

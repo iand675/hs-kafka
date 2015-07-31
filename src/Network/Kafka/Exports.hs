@@ -32,12 +32,6 @@ instance ByteSize Int32 where
 instance ByteSize Int64 where
   byteSize = const 8
 
-instance ByteSize BS.ByteString where
-  byteSize = fromIntegral . BS.length
-
-instance ByteSize BL.ByteString where
-  byteSize = fromIntegral . BL.length
-
 byteSizeL :: ByteSize a => Getter s a -> s -> Int32
 byteSizeL g = view (g . to byteSize)
 {-# INLINE byteSizeL #-}

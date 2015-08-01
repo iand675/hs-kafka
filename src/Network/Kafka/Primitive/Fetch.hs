@@ -135,7 +135,7 @@ instance Binary (FetchResult 0) where
     putL partition r
     putL errorCode r
     putL highwaterMarkOffset r
-    let c = fromIntegral $ V.length $ messageSetMessages $ fetchResultV0MessageSet r
+    let c = sum $ map byteSize $ messageSetMessages $ fetchResultV0MessageSet r
     put (c :: Int32)
     putMessageSet $ fetchResultV0MessageSet r
 

@@ -14,6 +14,7 @@ import           Data.Binary.Get
 import           Data.Binary.Put
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
+import           Data.Digest.CRC32
 import           Data.Int
 import qualified Data.Vector as V
 import qualified Data.Vector.Generic as G
@@ -25,7 +26,7 @@ import           Network.Kafka.Fields
 import           Debug.Trace
 
 newtype Array v a = Array { fromArray :: v a }
-  deriving (Show, Generic)
+  deriving (Show, Eq, Generic)
 
 instance (Binary a, G.Vector v a) => Binary (Array v a) where
   get = do
@@ -35,11 +36,14 @@ instance (Binary a, G.Vector v a) => Binary (Array v a) where
     putWord32be $ fromIntegral $ G.length v
     G.mapM_ put v
 
+instance (ByteSize a, Functor f, Foldable f) => ByteSize (Array f a) where
+  byteSize f = 4 + (sum $ fmap byteSize $ fromArray f)
+
 instance ByteSize a => ByteSize (V.Vector a) where
   byteSize v = 4 + (G.sum $ G.map byteSize v)
 
 newtype FixedArray v a = FixedArray { fromFixedArray :: v a }
-  deriving (Show, Generic)
+  deriving (Show, Eq, Generic)
 
 instance (Binary a, G.Vector v a) => Binary (FixedArray v a) where
   get = (FixedArray . fromArray) <$> get
@@ -134,10 +138,6 @@ newtype CoordinatorId = CoordinatorId { fromCoordinatorId :: Int32 }
   deriving (Show, Eq, Ord, Binary, ByteSize)
 
 
-newtype Partition = Partition { fromPartition :: Int32 }
-  deriving (Show, Eq, Ord, Binary, ByteSize)
-
-
 newtype NodeId = NodeId { fromNodeId :: Int32 }
   deriving (Show, Eq, Ord, Binary, ByteSize)
 
@@ -165,6 +165,7 @@ instance ByteSize Utf8 where
   byteSize (Utf8 bs) = 2 + (fromIntegral $ BS.length bs)
 
 newtype Bytes = Bytes { fromBytes :: ByteString }
+  deriving (Show, Eq)
 
 instance Binary Bytes where
   get = do
@@ -180,9 +181,12 @@ instance ByteSize Bytes where
 data CompressionCodec = NoCompression
                       | GZip
                       | Snappy
+                      deriving (Show, Eq)
 
 
 newtype Attributes = Attributes { attributesCompression :: CompressionCodec }
+  deriving (Show, Eq)
+
 instance ByteSize Attributes where
   byteSize = const 1
 
@@ -213,33 +217,43 @@ data OffsetCommit
 data OffsetFetch
 
 data Message = Message
-  { messageCrc        :: !Int32
-  , messageMagicByte  :: !Int8
+  -- messageCrc would go here
+  { messageMagicByte  :: !Int8
   , messageAttributes :: !Attributes
   , messageKey        :: !Bytes
   , messageValue      :: !Bytes
-  }
+  } deriving (Show, Eq, Generic)
 
 instance ByteSize Message where
-  byteSize m = byteSizeL crc m +
+  byteSize m = 4 + -- crc
                byteSizeL magicByte m +
                byteSizeL attributes m +
-               byteSizeL key m +
-               byteSizeL value m
+               byteSize (messageKey m) +
+               byteSize (messageValue m)
   {-# INLINE byteSize #-}
 
 instance Binary Message where
-  get = Message <$> get <*> get <*> get <*> get <*> get
+  get = do
+    crc <- get :: Get Word32
+    bsStart <- bytesRead
+    (msg, bsEnd) <- lookAhead $ do
+      msg <- Message <$> get <*> get <*> get <*> get
+      bsEnd <- bytesRead
+      return (msg, bsEnd)
+    crcChunk <- getByteString $ fromIntegral (bsEnd - bsStart)
+    let crcFinal = crc32 crcChunk
+    if crcFinal /= crc
+      then fail ("Invalid CRC: expected " ++ show crc ++ ", got " ++ show crcFinal)
+      else return msg
   put p = do
-    putL crc p
-    putL magicByte p
-    putL attributes p
-    putL key p
-    putL value p
-
-instance HasCrc Message Int32 where
-  crc = lens messageCrc (\s a -> s { messageCrc = a })
-  {-# INLINEABLE crc #-}
+    let rest = runPut $ do
+          putL magicByte p
+          putL attributes p
+          put $ messageKey p
+          put $ messageValue p
+        msgCrc = crc32 rest
+    put msgCrc
+    putLazyByteString rest
 
 instance HasMagicByte Message Int8 where
   magicByte = lens messageMagicByte (\s a -> s { messageMagicByte = a })
@@ -249,18 +263,18 @@ instance HasAttributes Message Attributes where
   attributes = lens messageAttributes (\s a -> s { messageAttributes = a })
   {-# INLINEABLE attributes #-}
 
-instance HasKey Message Bytes where
-  key = lens messageKey (\s a -> s { messageKey = a })
+instance HasKey Message ByteString where
+  key = lens (fromBytes . messageKey) (\s a -> s { messageKey = Bytes a })
   {-# INLINEABLE key #-}
 
-instance HasValue Message Bytes where
-  value = lens messageValue (\s a -> s { messageValue = a })
+instance HasValue Message ByteString where
+  value = lens (fromBytes . messageValue) (\s a -> s { messageValue = Bytes a })
   {-# INLINEABLE value #-}
 
 data MessageSetItem = MessageSetItem
   { messageSetItemOffset  :: !Int64
   , messageSetItemMessage :: !Message
-  }
+  } deriving (Show, Eq, Generic)
 
 instance Binary MessageSetItem where
   get = do
@@ -276,7 +290,9 @@ instance Binary MessageSetItem where
   {-# INLINE put #-}
 
 instance ByteSize MessageSetItem where
-  byteSize m = byteSizeL offset m + byteSizeL message m
+  byteSize m = byteSizeL offset m +
+               4 + -- MessageSize
+               byteSizeL message m
   {-# INLINE byteSize #-}
 
 instance HasOffset MessageSetItem Int64 where
@@ -288,23 +304,25 @@ instance HasMessage MessageSetItem Message where
   {-# INLINEABLE message #-}
 
 newtype MessageSet = MessageSet
-  { messageSetMessages :: V.Vector MessageSetItem
+  { messageSetMessages :: [MessageSetItem]
   }
 
 instance ByteSize MessageSet where
-  byteSize = V.sum . V.map byteSize . messageSetMessages
+  byteSize = sum . map byteSize . messageSetMessages
 
 getMessageSet :: Int32 -> Get MessageSet
-getMessageSet c = MessageSet <$> V.replicateM (fromIntegral c) get
+getMessageSet c = fmap (MessageSet . reverse) $ isolate (fromIntegral c) $ go []
+  where
+    go xs = do
+      pred <- isEmpty
+      if pred
+        then return xs
+        else do
+          x <- get
+          go (x:xs)
 
 putMessageSet :: MessageSet -> Put
-putMessageSet = V.mapM_ put . messageSetMessages
-
-data PartitionMessages = PartitionMessages
-  { partitionMessagesPartition :: !PartitionId
-  , partitionMessagesMessages  :: !MessageSet
-  }
-
+putMessageSet = mapM_ put . messageSetMessages
 
 
 newtype GenerationId = GenerationId Int32
@@ -323,6 +341,7 @@ data Request a v = Request
   } deriving (Generic)
 
 deriving instance (Show (RequestMessage a v)) => Show (Request a v)
+deriving instance (Eq (RequestMessage a v)) => Eq (Request a v)
 
 instance (KnownNat v, RequestApiKey a, ByteSize (RequestMessage a v), Binary (RequestMessage a v)) => Binary (Request a v) where
   get = do
@@ -382,6 +401,7 @@ instance (KnownNat v, RequestApiKey a, ByteSize (ResponseMessage a v), Binary (R
     put $ responseMessage p
 
 deriving instance (Show (ResponseMessage a v)) => Show (Response a v)
+deriving instance (Eq (ResponseMessage a v)) => Eq (Response a v)
 
 instance (ByteSize (ResponseMessage a v)) => ByteSize (Response a v) where
   byteSize p = byteSize (responseCorrelationId p) +

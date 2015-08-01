@@ -40,19 +40,21 @@ library
                        network,
                        text,
                        profunctors,
-                       contravariant
+                       contravariant,
+                       digest
   hs-source-dirs:      src
   default-language:    Haskell2010
 
--- test-suite tests
---  type:                exitcode-stdio-1.0
---  main-is:             Main.hs
---  build-depends:       base,
---                       bytestring,
---                       vector,
---                       text,
---                       QuickCheck,
---                       HUnit,
---                       hs-kafka
---  hs-source-dirs:      src
---  default-language:    Haskell2010
+test-suite tests
+  type:                exitcode-stdio-1.0
+  main-is:             Main.hs
+  build-depends:       base,
+                       bytestring,
+                       vector,
+                       text,
+                       QuickCheck,
+                       HUnit,
+                       hs-kafka,
+                       derive
+  hs-source-dirs:      test
+  default-language:    Haskell2010

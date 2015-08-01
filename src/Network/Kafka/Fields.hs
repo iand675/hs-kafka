@@ -137,9 +137,6 @@ class HasKey s a | s -> a where
 class HasValue s a | s -> a where
   value :: Lens' s a
 
-class HasCrc s a | s -> a where
-  crc :: Lens' s a
-
 class HasMagicByte s a | s -> a where
   magicByte :: Lens' s a
 
@@ -164,3 +161,14 @@ class HasConsumer s a | s -> a where
 class HasRetentionTime s a | s -> a where
   retentionTime :: Lens' s a
 
+class HasRequiredAcks s a | s -> a where
+  requiredAcks :: Lens' s a
+
+class HasTimeout s a | s -> a where
+  timeout :: Lens' s a
+
+class HasTopicPublishes s a | s -> a where
+  topicPublishes :: Lens' s a
+
+class HasPartitionResults s a | s -> a where
+  partitionResults :: Lens' s a

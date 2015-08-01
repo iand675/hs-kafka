@@ -8,8 +8,6 @@ module Network.Kafka.Exports
 , byteSizeL
 , Generic
 ) where
-import qualified Data.ByteString as BS
-import qualified Data.ByteString.Lazy as BL
 import Data.Int
 import GHC.Generics hiding (to)
 import GHC.TypeLits

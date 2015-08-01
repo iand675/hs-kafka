@@ -9,23 +9,24 @@ import qualified Data.Vector as V
 import           Network.Kafka.Exports
 import           Network.Kafka.Types
 
-data instance RequestMessage ConsumerMetadata 0 = ConsumerMetadataRequest
-  { consumerMetadataRequestConsumerGroup :: !Utf8
-  } deriving (Show, Generic)
+data instance RequestMessage ConsumerMetadata 0 = ConsumerMetadataRequestV0
+  { consumerMetadataRequestV0ConsumerGroup :: !Utf8
+  } deriving (Show, Eq, Generic)
 
 instance Binary (RequestMessage ConsumerMetadata 0) where
-  get = ConsumerMetadataRequest <$> get
-  put = put . consumerMetadataRequestConsumerGroup
+  get = ConsumerMetadataRequestV0 <$> get
+  put = putL consumerGroup 
 
 instance ByteSize (RequestMessage ConsumerMetadata 0) where
-  byteSize = byteSize . consumerMetadataRequestConsumerGroup
+  byteSize = byteSizeL consumerGroup
 
 instance HasConsumerGroup (RequestMessage ConsumerMetadata 0) Utf8 where
-  consumerGroup = lens consumerMetadataRequestConsumerGroup (\s a -> s { consumerMetadataRequestConsumerGroup = a })
+  consumerGroup = lens consumerMetadataRequestV0ConsumerGroup (\s a -> s { consumerMetadataRequestV0ConsumerGroup = a })
   {-# INLINEABLE consumerGroup #-}
 
 
-data instance ResponseMessage ConsumerMetadata 0 = ConsumerMetadataResponse
+
+data instance ResponseMessage ConsumerMetadata 0 = ConsumerMetadataResponseV0
   { consumerMetadataResponseV0ErrorCode       :: !ErrorCode
   , consumerMetadataResponseV0CoordinatorId   :: !CoordinatorId
   , consumerMetadataResponseV0CoordinatorHost :: !Utf8
@@ -33,7 +34,7 @@ data instance ResponseMessage ConsumerMetadata 0 = ConsumerMetadataResponse
   } deriving (Show, Generic)
 
 instance Binary (ResponseMessage ConsumerMetadata 0) where
-  get = ConsumerMetadataResponse <$> get <*> get <*> get <*> get 
+  get = ConsumerMetadataResponseV0 <$> get <*> get <*> get <*> get 
   put r = do
     putL errorCode r
     putL coordinatorId r

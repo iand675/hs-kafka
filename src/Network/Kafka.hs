@@ -9,14 +9,19 @@
 {-# LANGUAGE StandaloneDeriving #-}
 module Network.Kafka where
 
+import Control.Applicative
+import Control.Concurrent.Supply
 import Control.Monad
-import Data.Binary
-import Data.Binary.Get
-import Data.Binary.Put
+import Control.Monad.Fix
+import Control.Monad.Trans
+import Control.Monad.Trans.State.Strict
 import Data.Int
 import qualified Data.ByteString.Lazy as BL
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as T
 import qualified Data.Vector as V
 import Network.Kafka.Exports (ByteSize, byteSize)
+import qualified Network.Kafka.Fields as F
 import Network.Kafka.Primitive.ConsumerMetadata
 import Network.Kafka.Primitive.Fetch
 import Network.Kafka.Primitive.Metadata
@@ -27,105 +32,67 @@ import Network.Kafka.Protocol
 import Network.Kafka.Types
 
 
+data KafkaState = KafkaState
+  { kafkaStateSupply   :: !Supply
+  , kafkaStateClient   :: !KafkaClient
+  , kafkaStateClientId :: !Utf8
+  }
 
+newtype KafkaT m a = KafkaT { execKafkaT :: StateT KafkaState m a }
+  deriving (Functor, Applicative, Monad, MonadFix, MonadTrans, Alternative, MonadPlus, MonadIO)
 
+data Coordinator = Coordinator
+  { coordinatorId   :: CoordinatorId
+  , coordinatorHost :: T.Text
+  , coordinatorPort :: Int
+  } deriving (Show, Eq)
 
+request :: Monad m => RequestMessage p v -> KafkaT m (Request p v)
+request r = KafkaT $ do
+  st <- get
+  let (ident, supply') = freshId $ kafkaStateSupply st
+  put $ st { kafkaStateSupply = supply' }
+  return $ Request (CorrelationId $ fromIntegral ident) (kafkaStateClientId st) r
 
+newtype ConsumerGroup = ConsumerGroup { fromConsumerGroup :: T.Text }
 
+getConsumerMetadata :: MonadIO m => ConsumerGroup -> KafkaT m (Either ErrorCode Coordinator)
+getConsumerMetadata g = KafkaT $ do
+  req <- execKafkaT $ request $ ConsumerMetadataRequestV0 $ Utf8 $ T.encodeUtf8 $ fromConsumerGroup g
+  client <- kafkaStateClient <$> get
+  resp' <- liftIO $ send client req
+  let resp = responseMessage resp'
+  return $ case F.view F.errorCode resp of
+    NoError -> Right $ Coordinator (F.view F.coordinatorId resp) (F.view (F.coordinatorHost . F.to (T.decodeUtf8 . fromUtf8)) resp) (F.view (F.coordinatorPort . F.to fromIntegral) resp)
+    err -> Left err
 
+runKafkaT :: MonadIO m => KafkaClient -> T.Text -> KafkaT m a -> m a
+runKafkaT client clientId m = do
+  s <- liftIO newSupply
+  evalStateT (execKafkaT m) (KafkaState s client $ Utf8 $ T.encodeUtf8 clientId) 
 
+-- fetch
+-- getMetadata
+-- getOffsetRanges
+-- commitOffsets
+-- getOffsets
 
+data AckSetting
+  = NeverWait
+  -- ^ The producer never waits for an acknowledgement from the broker (the same behavior as 0.7).
+  -- This option provides the lowest latency but the weakest durability guarantees (some data will be lost when a server fails).
+  | LeaderAcknowledged
+  -- ^ The producer gets an acknowledgement after the leader replica has received the data.
+  -- This option provides better durability as the client waits until the server acknowledges
+  -- the request as successful (only messages that were written to the now-dead leader but not yet replicated will be lost).
+  | AtLeast Int
+  -- ^ At least N brokers must have committed the data to their log and acknowledged this to the leader.
+  | AllAcknowledged
+  -- ^ The producer gets an acknowledgement after all in-sync replicas have received the data.
+  -- This option provides the greatest level of durability. However, it does not completely
+  -- eliminate the risk of message loss because the number of in sync replicas may, in rare cases, shrink to 1.
+  -- If you want to ensure that some minimum number of replicas (typically a majority) receive a write,
+  -- then you must set the topic-level min.insync.replicas setting.
+  -- Please read the Replication section of the design documentation for a more in-depth discussion.
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-check :: Binary a => a -> (BL.ByteString, Int64, a)
-check x = let bs = runPut $ put x in (bs, BL.length bs, runGet get bs)
-
-{-
-go $ runGetIncremental get
-where
-  go (Partial cb) = do
-    old <- atomicModifyIORef' (kafkaLeftovers c) $ \old -> (Nothing, old)
-    case old of
-      Nothing -> do
-        chunk <- recv (kafkaSocket c) 4096
-        print chunk
-        go $ cb chunk
-      c -> do
-        print c
-        go $ cb c
-  go (Done left off resp) = do
-    modifyIORef' (kafkaLeftovers c) (\leftOld -> leftOld <> if BS.null left then Nothing else Just left)
-    putStrLn "done"
-    return resp
-  go (Fail bs off err) = do
-    putStrLn "error"
-    error err
--}
-
-asserting :: (Show a, Eq a, Binary a, ByteSize a) => a -> IO ()
-asserting x = do
-  putStrLn ("Checking " ++ show x)
-  let (bs, c, x') = check x
-  when (fromIntegral (byteSize x) /= c) $ putStrLn "Invalid byteSize!\n"
-  if x /= x'
-    then putStrLn "Bad round-trip!\n"
-    else putStrLn "OK!\n"
-
-
-r :: RequestMessage a v -> Request a v
-r = Request (CorrelationId 12) (Utf8 "client")
-
-checkAll = do
-  asserting $ Array $ V.fromList [1,2,3,4 :: Int16]
-  asserting $ FixedArray $ V.fromList [1,2,3,4 :: Int32]
-  asserting $ NoError
-  asserting $ ApiKey 12
-  asserting $ ApiVersion 3
-  asserting $ CorrelationId 342
-  asserting $ CoordinatorId 103
-  asserting $ NodeId 2130
-  asserting $ PartitionId 3024032
-  asserting $ ConsumerId $ Utf8 "walrus"
-  asserting $ Utf8 "hi there folks!"
-  asserting $ Bytes "hey ho weirweirwe"
-  asserting $ Attributes GZip
-  asserting $ Message 0 (Attributes Snappy) (Bytes "yo") (Bytes "hi")
-  asserting $ MessageSetItem 0 $ Message 1 (Attributes NoCompression) (Bytes "foo") (Bytes "bar")
-  asserting $ ConsumerMetadataRequestV0 $ Utf8 "consumer-group"
-  asserting $ PartitionFetch (PartitionId 9) 789 101112
-  asserting $ TopicFetch (Utf8 "topic") $ V.fromList []
-  asserting $ FetchRequestV0 (NodeId 5) 7 13 $ V.fromList []
-  asserting $ ProduceRequestV0 1 3000 $ V.fromList
-    [ TopicPublish (Utf8 "topic") $ V.fromList
-        [ PartitionMessages (PartitionId 0) $ MessageSet
-            [ MessageSetItem 0 $ Message 0 (Attributes NoCompression) (Bytes "k") (Bytes "v")
-            ]
-        ]
-    ]
-  asserting $ r $ ConsumerMetadataRequestV0 $ Utf8 "consumer-group"
+send :: 

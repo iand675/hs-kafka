@@ -69,11 +69,11 @@ data ErrorCode
   | BrokerNotAvailable
   | ReplicaNotAvailable
   | MessageSizeTooLarge
-  | StaleControllerEpochCode
-  | OffsetMetadataTooLargeCode
-  | OffsetsLoadInProgressCode
-  | ConsumerCoordinatorNotAvailableCode
-  | NotCoordinatorForConsumerCode
+  | StaleControllerEpoch
+  | OffsetMetadataTooLarge
+  | OffsetsLoadInProgress
+  | ConsumerCoordinatorNotAvailable
+  | NotCoordinatorForConsumer
   deriving (Show, Eq, Generic)
 
 instance Enum ErrorCode where
@@ -89,11 +89,11 @@ instance Enum ErrorCode where
     8 -> BrokerNotAvailable
     9 -> ReplicaNotAvailable
     10 -> MessageSizeTooLarge
-    11 -> StaleControllerEpochCode
-    12 -> OffsetMetadataTooLargeCode
-    14 -> OffsetsLoadInProgressCode
-    15 -> ConsumerCoordinatorNotAvailableCode
-    16 -> NotCoordinatorForConsumerCode
+    11 -> StaleControllerEpoch
+    12 -> OffsetMetadataTooLarge
+    14 -> OffsetsLoadInProgress
+    15 -> ConsumerCoordinatorNotAvailable
+    16 -> NotCoordinatorForConsumer
     _ -> Unknown
   fromEnum c = case c of
     NoError -> 0
@@ -108,11 +108,11 @@ instance Enum ErrorCode where
     BrokerNotAvailable -> 8
     ReplicaNotAvailable -> 9
     MessageSizeTooLarge -> 10
-    StaleControllerEpochCode -> 11
-    OffsetMetadataTooLargeCode -> 12
-    OffsetsLoadInProgressCode -> 14
-    ConsumerCoordinatorNotAvailableCode -> 15
-    NotCoordinatorForConsumerCode -> 16
+    StaleControllerEpoch -> 11
+    OffsetMetadataTooLarge -> 12
+    OffsetsLoadInProgress -> 14
+    ConsumerCoordinatorNotAvailable -> 15
+    NotCoordinatorForConsumer -> 16
 
 instance Binary ErrorCode where
   get = (toEnum . fromIntegral) <$> (get :: Get Int16)

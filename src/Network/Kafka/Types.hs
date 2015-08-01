@@ -305,7 +305,7 @@ instance HasMessage MessageSetItem Message where
 
 newtype MessageSet = MessageSet
   { messageSetMessages :: [MessageSetItem]
-  }
+  } deriving (Show, Eq)
 
 instance ByteSize MessageSet where
   byteSize = sum . map byteSize . messageSetMessages
@@ -345,12 +345,10 @@ deriving instance (Eq (RequestMessage a v)) => Eq (Request a v)
 
 instance (KnownNat v, RequestApiKey a, ByteSize (RequestMessage a v), Binary (RequestMessage a v)) => Binary (Request a v) where
   get = do
-    bytesToRead <- fromIntegral <$> getWord32be
-    isolate bytesToRead $ do
-      _ <- get :: Get ApiKey
-      (Request <$> get <*> get <*> get)
+    _ <- get :: Get ApiKey
+    _ <- get :: Get ApiVersion
+    Request <$> get <*> get <*> get
   put p = do
-    put $ byteSize p
     put $ apiKey p
     put $ ApiVersion $ fromIntegral $ natVal p
     put $ requestCorrelationId p
@@ -392,11 +390,8 @@ data Response v a = Response
   } deriving (Generic)
 
 instance (KnownNat v, RequestApiKey a, ByteSize (ResponseMessage a v), Binary (ResponseMessage a v)) => Binary (Response a v) where
-  get = do
-    bytesToRead <- fromIntegral <$> getWord32be
-    isolate bytesToRead (Response <$> (trace "get corrId" get) <*> (trace "get request" get))
+  get = Response <$> get <*> get
   put p = do
-    put $ byteSize p
     put $ responseCorrelationId p
     put $ responseMessage p
 

@@ -14,6 +14,7 @@ import           GHC.TypeLits
 import           Network.Kafka.Types
 import           Network.Simple.TCP hiding (send)
 import qualified Network.Socket.ByteString.Lazy as Lazy
+import           Network.Kafka.Exports
 import           Network.Kafka.Primitive.ConsumerMetadata
 import           Network.Kafka.Primitive.Fetch
 import           Network.Kafka.Primitive.Metadata
@@ -34,7 +35,12 @@ withKafkaClient h p f = connect h p $ \(s, _) -> do
   ref <- newIORef =<< Lazy.getContents s
   f $ KafkaClient s ref
 
-class (RequestApiKey p, Binary (Request p v), Binary (Response p v)) => KafkaAction p (v :: Nat)
+class (KnownNat v,
+       ByteSize (RequestMessage p v),
+       Binary (RequestMessage p v),
+       ByteSize (ResponseMessage p v),
+       Binary (ResponseMessage p v),
+       RequestApiKey p) => KafkaAction p (v :: Nat)
 instance KafkaAction ConsumerMetadata 0
 instance KafkaAction Fetch 0
 instance KafkaAction Metadata 0
@@ -47,11 +53,18 @@ instance KafkaAction OffsetFetch 0
 instance KafkaAction OffsetFetch 1
 instance KafkaAction Produce 0
 
-send :: KafkaAction p v => KafkaClient -> Request p v -> IO (Response p v)
+withByteBoundary :: Get a -> Get a
+withByteBoundary g = do
+  bytesToRead <- fromIntegral <$> getWord32be
+  isolate bytesToRead g
+
+send :: (KafkaAction p v) => KafkaClient -> Request p v -> IO (Response p v)
 send c req = do
-  void $ Lazy.send (kafkaSocket c) $ runPut $ put req
+  void $ Lazy.send (kafkaSocket c) $ runPut $ do
+    put $ byteSize req
+    put req
   left <- readIORef $ kafkaLeftovers c
-  case runGetOrFail get left of
+  case runGetOrFail (withByteBoundary get) left of
     Left (_, _, err) -> error err
     Right (rest, _, x) -> writeIORef (kafkaLeftovers c) rest >> return x
 

@@ -9,6 +9,7 @@
 {-# LANGUAGE StandaloneDeriving #-}
 module Network.Kafka where
 
+import Control.Monad
 import Data.Binary
 import Data.Binary.Get
 import Data.Binary.Put
@@ -24,6 +25,43 @@ import Network.Kafka.Primitive.OffsetCommit
 import Network.Kafka.Primitive.Produce
 import Network.Kafka.Protocol
 import Network.Kafka.Types
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 check :: Binary a => a -> (BL.ByteString, Int64, a)
 check x = let bs = runPut $ put x in (bs, BL.length bs, runGet get bs)
@@ -54,11 +92,10 @@ asserting :: (Show a, Eq a, Binary a, ByteSize a) => a -> IO ()
 asserting x = do
   putStrLn ("Checking " ++ show x)
   let (bs, c, x') = check x
-  if fromIntegral (byteSize x) /= c
-    then putStrLn "Invalid byteSize!\n"
-    else if x /= x'
-      then putStrLn "Bad round-trip!\n"
-      else putStrLn "OK!\n"
+  when (fromIntegral (byteSize x) /= c) $ putStrLn "Invalid byteSize!\n"
+  if x /= x'
+    then putStrLn "Bad round-trip!\n"
+    else putStrLn "OK!\n"
 
 
 r :: RequestMessage a v -> Request a v
@@ -81,4 +118,14 @@ checkAll = do
   asserting $ Message 0 (Attributes Snappy) (Bytes "yo") (Bytes "hi")
   asserting $ MessageSetItem 0 $ Message 1 (Attributes NoCompression) (Bytes "foo") (Bytes "bar")
   asserting $ ConsumerMetadataRequestV0 $ Utf8 "consumer-group"
+  asserting $ PartitionFetch (PartitionId 9) 789 101112
+  asserting $ TopicFetch (Utf8 "topic") $ V.fromList []
+  asserting $ FetchRequestV0 (NodeId 5) 7 13 $ V.fromList []
+  asserting $ ProduceRequestV0 1 3000 $ V.fromList
+    [ TopicPublish (Utf8 "topic") $ V.fromList
+        [ PartitionMessages (PartitionId 0) $ MessageSet
+            [ MessageSetItem 0 $ Message 0 (Attributes NoCompression) (Bytes "k") (Bytes "v")
+            ]
+        ]
+    ]
   asserting $ r $ ConsumerMetadataRequestV0 $ Utf8 "consumer-group"

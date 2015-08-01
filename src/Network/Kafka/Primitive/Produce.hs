@@ -13,7 +13,7 @@ import           Network.Kafka.Types
 data PartitionMessages = PartitionMessages
   { partitionMessagesPartition  :: !PartitionId
   , partitionMessagesMessageSet :: !MessageSet
-  }
+  } deriving (Show, Eq)
 
 instance Binary PartitionMessages where
   get = do
@@ -44,7 +44,7 @@ instance HasMessageSet PartitionMessages MessageSet where
 data TopicPublish = TopicPublish
   { topicPublishTopic      :: !Utf8
   , topicPublishPartitions :: !(V.Vector PartitionMessages)
-  }
+  } deriving (Show, Eq)
 
 instance Binary TopicPublish where
   get = TopicPublish <$> get <*> (fromArray <$> get)
@@ -70,7 +70,7 @@ data instance RequestMessage Produce 0 = ProduceRequestV0
   { produceRequestV0RequiredAcks   :: !Int16
   , produceRequestV0Timeout        :: !Int32
   , produceRequestV0TopicPublishes :: !(V.Vector TopicPublish)
-  }
+  } deriving (Show, Eq)
 
 instance Binary (RequestMessage Produce 0) where
   get = ProduceRequestV0 <$> get <*> get <*> (fromArray <$> get)

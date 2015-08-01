@@ -14,7 +14,7 @@ data instance RequestMessage Fetch 0 = FetchRequestV0
   , fetchRequestV0MaxWaitTime :: !Int32
   , fetchRequestV0MinBytes    :: !Int32
   , fetchRequestV0Topics      :: !(V.Vector TopicFetch)
-  }
+  } deriving (Show, Eq)
 
 instance Binary (RequestMessage Fetch 0) where
   get = FetchRequestV0 <$> get <*> get <*> get <*> (fromArray <$> get)
@@ -50,7 +50,7 @@ instance HasTopics (RequestMessage Fetch 0) (V.Vector TopicFetch) where
 data TopicFetch = TopicFetch
   { topicFetchTopic      :: !Utf8
   , topicFetchPartitions :: !(V.Vector PartitionFetch)
-  }
+  } deriving (Show, Eq)
 
 instance Binary TopicFetch where
   get = TopicFetch <$> get <*> (fromFixedArray <$> get)
@@ -71,7 +71,7 @@ data PartitionFetch = PartitionFetch
   { partitionFetchPartition :: !PartitionId
   , partitionFetchOffset    :: !Int64
   , partitionFetchMaxBytes  :: !Int32
-  }
+  } deriving (Show, Eq)
 
 instance Binary PartitionFetch where
   get = PartitionFetch <$> get <*> get <*> get

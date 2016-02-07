@@ -11,7 +11,7 @@ import qualified Data.Vector as V
 
 data instance RequestMessage Metadata 0 = MetadataRequestV0
   { metadataRequestV0Topics :: !(V.Vector Utf8)
-  } deriving (Show, Generic)
+  } deriving (Eq, Show, Generic)
 
 instance Binary (RequestMessage Metadata 0) where
   get = MetadataRequestV0 <$> (fromArray <$> get)
@@ -28,7 +28,7 @@ instance HasTopics (RequestMessage Metadata 0) (V.Vector Utf8) where
 data instance ResponseMessage Metadata 0 = MetadataResponseV0
   { metadataResponseV0Brokers :: !(V.Vector Broker)
   , metadataResponseV0Topics  :: !(V.Vector TopicMetadata)
-  } deriving (Show, Generic)
+  } deriving (Eq, Show, Generic)
 
 instance Binary (ResponseMessage Metadata 0) where
   get = MetadataResponseV0 <$> (fromArray <$> get) <*> (fromArray <$> get)
@@ -52,7 +52,7 @@ data Broker = Broker
   { brokerNodeId :: !NodeId
   , brokerHost   :: !Utf8
   , brokerPort   :: !Int32
-  } deriving (Show)
+  } deriving (Show, Eq, Generic)
 
 instance Binary Broker where
   get = Broker <$> get <*> get <*> get
@@ -79,7 +79,7 @@ data TopicMetadata = TopicMetadata
   { topicMetadataErrorCode         :: !ErrorCode
   , topicMetadataTopic             :: !Utf8
   , topicMetadataPartitionMetadata :: !(V.Vector PartitionMetadata)
-  } deriving (Show)
+  } deriving (Eq, Show, Generic)
 
 instance Binary TopicMetadata where
   get = TopicMetadata <$> get <*> get <*> (fromArray <$> get)
@@ -112,7 +112,7 @@ data PartitionMetadata = PartitionMetadata
   , partitionMetadataLeader       :: !NodeId
   , partitionMetadataReplicas     :: !(V.Vector NodeId)
   , partitionMetadataIsReplicated :: !(V.Vector NodeId)
-  } deriving (Show)
+  } deriving (Eq, Show, Generic)
 
 instance Binary PartitionMetadata where
   get = PartitionMetadata <$> get <*> get <*> get <*> (fromFixedArray <$> get) <*> (fromFixedArray <$> get)

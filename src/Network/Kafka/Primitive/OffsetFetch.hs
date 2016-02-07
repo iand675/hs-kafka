@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveGeneric         #-}
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -12,7 +13,7 @@ import           Network.Kafka.Types
 data instance RequestMessage OffsetFetch 0 = OffsetFetchRequestV0
   { offsetFetchRequestV0ConsumerGroup :: !Utf8
   , offsetFetchRequestV0Topics        :: (V.Vector TopicOffset)
-  }
+  } deriving (Show, Eq, Generic)
 
 instance Binary (RequestMessage OffsetFetch 0) where
   get = OffsetFetchRequestV0 <$> get <*> (fromArray <$> get)
@@ -36,7 +37,7 @@ instance HasTopics (RequestMessage OffsetFetch 0) (V.Vector TopicOffset) where
 data TopicOffset = TopicOffset
   { topicOffsetTopic      :: !Utf8
   , topicOffsetPartitions :: !(V.Vector PartitionId)
-  }
+  } deriving (Show, Eq, Generic)
 
 instance Binary TopicOffset where
   get = TopicOffset <$> get <*> (fromFixedArray <$> get)
@@ -59,7 +60,7 @@ instance HasPartitions TopicOffset (V.Vector PartitionId) where
 
 data instance ResponseMessage OffsetFetch 0 = OffsetFetchResponseV0
   { offsetFetchResponseV0Topics :: !(V.Vector TopicOffsetResponse)
-  }
+  } deriving (Show, Eq, Generic)
 
 instance Binary (ResponseMessage OffsetFetch 0) where
   get = (OffsetFetchResponseV0 . fromArray) <$> get
@@ -76,8 +77,8 @@ instance HasTopics (ResponseMessage OffsetFetch 0) (V.Vector TopicOffsetResponse
 
 data TopicOffsetResponse = TopicOffsetResponse
   { topicOffsetResponseTopic      :: !Utf8 
-  , topicOffsetResponsePartitions :: !(V.Vector PartitionOffset)
-  }
+  , topicOffsetResponsePartitions :: !(V.Vector PartitionOffsetFetch)
+  } deriving (Eq, Show, Generic)
 
 instance Binary TopicOffsetResponse where
   get = TopicOffsetResponse <$> get <*> (fromArray <$> get)
@@ -93,67 +94,83 @@ instance HasTopic TopicOffsetResponse Utf8 where
   topic = lens topicOffsetResponseTopic (\s a -> s { topicOffsetResponseTopic = a })
   {-# INLINEABLE topic #-}
 
-instance HasPartitions TopicOffsetResponse (V.Vector PartitionOffset) where
+instance HasPartitions TopicOffsetResponse (V.Vector PartitionOffsetFetch) where
   partitions = lens topicOffsetResponsePartitions (\s a -> s { topicOffsetResponsePartitions = a })
   {-# INLINEABLE partitions #-}
 
 
 
-data PartitionOffset = PartitionOffset
-  { partitionOffsetPartition :: !PartitionId
-  , partitionOffsetOffset    :: !Int64
-  , partitionOffsetMetadata  :: !Utf8
-  , partitionOffsetErrorCode :: !ErrorCode
-  }
+data PartitionOffsetFetch = PartitionOffsetFetch
+  { partitionOffsetFetchPartition :: !PartitionId
+  , partitionOffsetFetchOffset    :: !Int64
+  , partitionOffsetFetchMetadata  :: !Utf8
+  , partitionOffsetFetchErrorCode :: !ErrorCode
+  } deriving (Eq, Show, Generic)
 
-instance Binary PartitionOffset where
-  get = PartitionOffset <$> get <*> get <*> get <*> get
+instance Binary PartitionOffsetFetch where
+  get = PartitionOffsetFetch <$> get <*> get <*> get <*> get
   put p = do
     putL partition p
     putL offset p
     putL metadata p
     putL errorCode p
 
-instance ByteSize PartitionOffset where
+instance ByteSize PartitionOffsetFetch where
   byteSize p = byteSizeL partition p +
                byteSizeL offset p +
                byteSizeL metadata p +
                byteSizeL errorCode p
 
-instance HasPartition PartitionOffset PartitionId where
-  partition = lens partitionOffsetPartition (\s a -> s { partitionOffsetPartition = a })
+instance HasPartition PartitionOffsetFetch PartitionId where
+  partition = lens partitionOffsetFetchPartition (\s a -> s { partitionOffsetFetchPartition = a })
   {-# INLINEABLE partition #-}
 
-instance HasOffset PartitionOffset Int64 where
-  offset = lens partitionOffsetOffset (\s a -> s { partitionOffsetOffset = a })
+instance HasOffset PartitionOffsetFetch Int64 where
+  offset = lens partitionOffsetFetchOffset (\s a -> s { partitionOffsetFetchOffset = a })
   {-# INLINEABLE offset #-}
 
-instance HasMetadata PartitionOffset Utf8 where
-  metadata = lens partitionOffsetMetadata (\s a -> s { partitionOffsetMetadata = a })
+instance HasMetadata PartitionOffsetFetch Utf8 where
+  metadata = lens partitionOffsetFetchMetadata (\s a -> s { partitionOffsetFetchMetadata = a })
   {-# INLINEABLE metadata #-}
 
-instance HasErrorCode PartitionOffset ErrorCode where
-  errorCode = lens partitionOffsetErrorCode (\s a -> s { partitionOffsetErrorCode = a })
+instance HasErrorCode PartitionOffsetFetch ErrorCode where
+  errorCode = lens partitionOffsetFetchErrorCode (\s a -> s { partitionOffsetFetchErrorCode = a })
   {-# INLINEABLE errorCode #-}
 
 
 
-data instance RequestMessage OffsetFetch 1 = OffsetFetchRequestV1 !(RequestMessage OffsetFetch 0)
+data instance RequestMessage OffsetFetch 1 = OffsetFetchRequestV1
+  { offsetFetchRequestV1ConsumerGroup :: !Utf8
+  , offsetFetchRequestV1Topics        :: (V.Vector TopicOffset)
+  } deriving (Show, Eq, Generic)
 
 instance Binary (RequestMessage OffsetFetch 1) where
-  get = OffsetFetchRequestV1 <$> get
-  put (OffsetFetchRequestV1 r) = put r
+  get = OffsetFetchRequestV1 <$> get <*> (fromArray <$> get)
+  put (OffsetFetchRequestV1 g t) = put g >> put (Array t)
 
-instance ByteSize (RequestMessage OffsetFetch 1) where
-  byteSize (OffsetFetchRequestV1 r) = byteSize r
-
-
-
-data instance ResponseMessage OffsetFetch 1 = OffsetFetchResponseV1 !(ResponseMessage OffsetFetch 1)
+data instance ResponseMessage OffsetFetch 1 = OffsetFetchResponseV1
+  { offsetFetchResponseV1Topics :: !(V.Vector TopicOffsetResponse)
+  } deriving (Show, Eq, Generic)
 
 instance Binary (ResponseMessage OffsetFetch 1) where
-  get = OffsetFetchResponseV1 <$> get
-  put (OffsetFetchResponseV1 r) = put r
+  get = (OffsetFetchResponseV1 . fromArray) <$> get
+  put r = putL (topics . to Array) r
 
 instance ByteSize (ResponseMessage OffsetFetch 1) where
-  byteSize (OffsetFetchResponseV1 r) = byteSize r 
+  byteSize r = byteSizeL topics r
+
+instance ByteSize (RequestMessage OffsetFetch 1) where
+  byteSize r = byteSizeL consumerGroup r + byteSizeL topics r
+
+instance HasConsumerGroup (RequestMessage OffsetFetch 1) Utf8 where
+  consumerGroup = lens offsetFetchRequestV1ConsumerGroup (\s a -> s { offsetFetchRequestV1ConsumerGroup = a })
+  {-# INLINEABLE consumerGroup #-}
+
+instance HasTopics (RequestMessage OffsetFetch 1) (V.Vector TopicOffset) where
+  topics = lens offsetFetchRequestV1Topics (\s a -> s { offsetFetchRequestV1Topics = a })
+  {-# INLINEABLE topics #-}
+
+instance HasTopics (ResponseMessage OffsetFetch 1) (V.Vector TopicOffsetResponse) where
+  topics = lens offsetFetchResponseV1Topics (\s a -> s { offsetFetchResponseV1Topics = a })
+  {-# INLINEABLE topics #-}
+

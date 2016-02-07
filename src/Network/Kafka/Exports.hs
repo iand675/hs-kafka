@@ -33,3 +33,4 @@ instance ByteSize Int64 where
 byteSizeL :: ByteSize a => Getter s a -> s -> Int32
 byteSizeL g = view (g . to byteSize)
 {-# INLINE byteSizeL #-}
+

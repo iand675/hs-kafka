@@ -24,14 +24,12 @@ instance HasConsumerGroup (RequestMessage ConsumerMetadata 0) Utf8 where
   consumerGroup = lens consumerMetadataRequestV0ConsumerGroup (\s a -> s { consumerMetadataRequestV0ConsumerGroup = a })
   {-# INLINEABLE consumerGroup #-}
 
-
-
 data instance ResponseMessage ConsumerMetadata 0 = ConsumerMetadataResponseV0
   { consumerMetadataResponseV0ErrorCode       :: !ErrorCode
   , consumerMetadataResponseV0CoordinatorId   :: !CoordinatorId
   , consumerMetadataResponseV0CoordinatorHost :: !Utf8
   , consumerMetadataResponseV0CoordinatorPort :: !Int32
-  } deriving (Show, Generic)
+  } deriving (Show, Eq, Generic)
 
 instance Binary (ResponseMessage ConsumerMetadata 0) where
   get = ConsumerMetadataResponseV0 <$> get <*> get <*> get <*> get 

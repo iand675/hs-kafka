@@ -31,20 +31,30 @@ library
                        Network.Kafka.Types
 
   -- other-modules:       
-  other-extensions:    TypeFamilies, GeneralizedNewtypeDeriving, FlexibleContexts, FlexibleInstances, ScopedTypeVariables, OverloadedStrings, DeriveGeneric, UndecidableInstances, StandaloneDeriving, DataKinds
-  build-depends:       base,
-                       binary,
-                       bytestring,
-                       vector,
-                       network-simple,
-                       network,
-                       text,
-                       profunctors,
-                       contravariant,
-                       digest,
-                       concurrent-supply,
-                       mtl,
-                       transformers
+  other-extensions:    TypeFamilies
+                     , GeneralizedNewtypeDeriving
+                     , FlexibleContexts
+                     , FlexibleInstances
+                     , ScopedTypeVariables
+                     , OverloadedStrings
+                     , DeriveGeneric
+                     , UndecidableInstances
+                     , StandaloneDeriving
+                     , DataKinds
+  build-depends:       base
+                     , binary
+                     , bytestring
+                     , pipes
+                     , vector
+                     , network-simple
+                     , network
+                     , text
+                     , profunctors
+                     , contravariant
+                     , digest
+                     , concurrent-supply
+                     , mtl
+                     , transformers
   hs-source-dirs:      src
   default-language:    Haskell2010
 
@@ -58,6 +68,10 @@ test-suite tests
                        QuickCheck,
                        HUnit,
                        hs-kafka,
-                       derive
+                       derive,
+                       tasty,
+                       tasty-hunit,
+                       tasty-quickcheck,
+                       QuickCheck
   hs-source-dirs:      test
   default-language:    Haskell2010

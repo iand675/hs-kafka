@@ -1,0 +1,6 @@
+dist
+.cabal-sandbox
+.stack-work
+*.swp
+*.swo
+cabal.sandbox.config

@@ -95,4 +95,3 @@ data AckSetting
   -- then you must set the topic-level min.insync.replicas setting.
   -- Please read the Replication section of the design documentation for a more in-depth discussion.
 
-send :: 

@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds             #-}
+{-# LANGUAGE DeriveGeneric         #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TemplateHaskell       #-}
@@ -17,7 +18,7 @@ data family CommitPartition (v :: Nat)
 data instance RequestMessage OffsetCommit 0 = OffsetCommitRequestV0
   { offsetCommitRequestV0ConsumerGroup :: !Utf8
   , offsetCommitRequestV0Commits       :: !(V.Vector (Commit 0))
-  }
+  } deriving (Eq, Show, Generic)
 
 instance Binary (RequestMessage OffsetCommit 0) where
   get = OffsetCommitRequestV0 <$> get <*> (fromArray <$> get)
@@ -42,7 +43,7 @@ instance HasCommits (RequestMessage OffsetCommit 0) (V.Vector (Commit 0)) where
 data instance Commit 0 = CommitV0
   { commitV0Topic      :: !Utf8
   , commitV0Partitions :: !(V.Vector (CommitPartition 0))
-  }
+  } deriving (Eq, Show, Generic)
 
 instance Binary (Commit 0) where
   get = CommitV0 <$> get <*> (fromArray <$> get)
@@ -68,7 +69,7 @@ data instance CommitPartition 0 = CommitPartitionV0
   { commitPartitionV0Partition :: !PartitionId
   , commitPartitionV0Offset    :: !Int64
   , commitPartitionV0Metadata  :: !Utf8
-  }
+  } deriving (Eq, Show, Generic)
 
 instance Binary (CommitPartition 0) where
   get = CommitPartitionV0 <$> get <*> get <*> get
@@ -101,7 +102,7 @@ data instance RequestMessage OffsetCommit 1 = OffsetCommitRequestV1
   , offsetCommitRequestV1Generation    :: !GenerationId
   , offsetCommitRequestV1Consumer      :: !ConsumerId
   , offsetCommitRequestV1Commits       :: !(V.Vector (Commit 1))
-  }
+  } deriving (Eq, Show, Generic)
 
 instance Binary (RequestMessage OffsetCommit 1) where
   get = OffsetCommitRequestV1 <$> get <*> get <*> get <*> (fromArray <$> get)
@@ -137,7 +138,7 @@ instance HasConsumer (RequestMessage OffsetCommit 1) ConsumerId where
 data instance Commit 1 = CommitV1
   { commitV1Topic      :: !Utf8
   , commitV1Partitions :: !(V.Vector (CommitPartition 1))
-  }
+  } deriving (Eq, Show, Generic)
 
 instance Binary (Commit 1) where
   get = CommitV1 <$> get <*> (fromArray <$> get)
@@ -164,7 +165,7 @@ data instance CommitPartition 1 = CommitPartitionV1
   , commitPartitionV1Offset    :: !Int64
   , commitPartitionV1Timestamp :: !Int64
   , commitPartitionV1Metadata  :: !Utf8
-  }
+  } deriving (Eq, Show, Generic)
 
 instance Binary (CommitPartition 1) where
   get = CommitPartitionV1 <$> get <*> get <*> get <*> get
@@ -204,7 +205,7 @@ data instance RequestMessage OffsetCommit 2 = OffsetCommitRequestV2
   , offsetCommitRequestV2Consumer      :: !ConsumerId
   , offsetCommitRequestV2RetentionTime :: !Int64
   , offsetCommitRequestV2Commits       :: !(V.Vector (Commit 2))
-  }
+  } deriving (Eq, Show, Generic)
 
 instance Binary (RequestMessage OffsetCommit 2) where
   get = OffsetCommitRequestV2 <$> get <*> get <*> get <*> get <*> (fromArray <$> get)
@@ -246,7 +247,7 @@ instance HasRetentionTime (RequestMessage OffsetCommit 2) Int64 where
 data instance Commit 2 = CommitV2
   { commitV2Topic      :: !Utf8
   , commitV2Partitions :: !(V.Vector (CommitPartition 2))
-  }
+  } deriving (Eq, Show, Generic)
 
 instance Binary (Commit 2) where
   get = CommitV2 <$> get <*> (fromArray <$> get)
@@ -272,7 +273,7 @@ data instance CommitPartition 2 = CommitPartitionV2
   { commitPartitionV2Partition :: !PartitionId
   , commitPartitionV2Offset    :: !Int64
   , commitPartitionV2Metadata  :: !Utf8
-  }
+  } deriving (Eq, Show, Generic)
 
 instance Binary (CommitPartition 2) where
   get = CommitPartitionV2 <$> get <*> get <*> get
@@ -302,7 +303,7 @@ instance HasMetadata (CommitPartition 2) Utf8 where
 
 data instance ResponseMessage OffsetCommit 0 = OffsetCommitResponseV0
   { offsetCommitResponseV0Results :: !(V.Vector CommitTopicResult)
-  }
+  } deriving (Eq, Show, Generic)
 
 instance Binary (ResponseMessage OffsetCommit 0) where
   get = (OffsetCommitResponseV0 . fromArray) <$> get
@@ -319,7 +320,7 @@ instance HasResults (ResponseMessage OffsetCommit 0) (V.Vector CommitTopicResult
 
 data instance ResponseMessage OffsetCommit 1 = OffsetCommitResponseV1
   { offsetCommitResponseV1Results :: !(V.Vector CommitTopicResult)
-  }
+  } deriving (Eq, Show, Generic)
 
 instance Binary (ResponseMessage OffsetCommit 1) where
   get = (OffsetCommitResponseV1 . fromArray) <$> get
@@ -336,7 +337,7 @@ instance HasResults (ResponseMessage OffsetCommit 1) (V.Vector CommitTopicResult
 
 data instance ResponseMessage OffsetCommit 2 = OffsetCommitResponseV2
   { offsetCommitResponseV2Results :: !(V.Vector CommitTopicResult)
-  }
+  } deriving (Eq, Show, Generic)
 
 instance Binary (ResponseMessage OffsetCommit 2) where
   get = (OffsetCommitResponseV2 . fromArray) <$> get
@@ -354,7 +355,7 @@ instance HasResults (ResponseMessage OffsetCommit 2) (V.Vector CommitTopicResult
 data CommitPartitionResult = CommitPartitionResult
   { commitPartitionResultPartition :: !PartitionId
   , commitPartitionResultErrorCode :: !ErrorCode
-  }
+  } deriving (Eq, Show, Generic)
 
 instance Binary CommitPartitionResult where
   get = CommitPartitionResult <$> get <*> get
@@ -379,7 +380,7 @@ instance HasErrorCode CommitPartitionResult ErrorCode where
 data CommitTopicResult = CommitTopicResult
   { commitTopicResultTopic   :: !Utf8
   , commitTopicResultResults :: !(V.Vector CommitPartitionResult)
-  }
+  } deriving (Eq, Show, Generic)
 
 instance Binary CommitTopicResult where
   get = CommitTopicResult <$> get <*> (fromFixedArray <$> get)

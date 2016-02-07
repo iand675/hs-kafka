@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds             #-}
+{-# LANGUAGE DeriveGeneric         #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE KindSignatures        #-}
@@ -14,7 +15,7 @@ data instance RequestMessage Fetch 0 = FetchRequestV0
   , fetchRequestV0MaxWaitTime :: !Int32
   , fetchRequestV0MinBytes    :: !Int32
   , fetchRequestV0Topics      :: !(V.Vector TopicFetch)
-  } deriving (Show, Eq)
+  } deriving (Show, Eq, Generic)
 
 instance Binary (RequestMessage Fetch 0) where
   get = FetchRequestV0 <$> get <*> get <*> get <*> (fromArray <$> get)
@@ -50,7 +51,7 @@ instance HasTopics (RequestMessage Fetch 0) (V.Vector TopicFetch) where
 data TopicFetch = TopicFetch
   { topicFetchTopic      :: !Utf8
   , topicFetchPartitions :: !(V.Vector PartitionFetch)
-  } deriving (Show, Eq)
+  } deriving (Show, Eq, Generic)
 
 instance Binary TopicFetch where
   get = TopicFetch <$> get <*> (fromFixedArray <$> get)
@@ -71,7 +72,7 @@ data PartitionFetch = PartitionFetch
   { partitionFetchPartition :: !PartitionId
   , partitionFetchOffset    :: !Int64
   , partitionFetchMaxBytes  :: !Int32
-  } deriving (Show, Eq)
+  } deriving (Show, Eq, Generic)
 
 instance Binary PartitionFetch where
   get = PartitionFetch <$> get <*> get <*> get
@@ -99,7 +100,7 @@ instance HasMaxBytes PartitionFetch Int32 where
 
 data instance ResponseMessage Fetch 0 = FetchResponseV0
   { fetchResponseV0Data :: !(V.Vector (FetchResult 0))
-  }
+  } deriving (Show, Eq, Generic)
 
 instance Binary (ResponseMessage Fetch 0) where
   get = FetchResponseV0 <$> (fromArray <$> get)
@@ -120,7 +121,7 @@ data instance FetchResult 0 = FetchResultV0
   , fetchResultV0ErrorCode           :: !ErrorCode
   , fetchResultV0HighwaterMarkOffset :: !Int64
   , fetchResultV0MessageSet          :: !MessageSet
-  }
+  } deriving (Show, Eq, Generic)
 
 instance Binary (FetchResult 0) where
   get = do

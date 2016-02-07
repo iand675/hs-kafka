@@ -37,10 +37,10 @@ instance (Binary a, G.Vector v a) => Binary (Array v a) where
     G.mapM_ put v
 
 instance (ByteSize a, Functor f, Foldable f) => ByteSize (Array f a) where
-  byteSize f = 4 + (sum $ fmap byteSize $ fromArray f)
+  byteSize f = 4 + sum (byteSize <$> fromArray f)
 
 instance ByteSize a => ByteSize (V.Vector a) where
-  byteSize v = 4 + (G.sum $ G.map byteSize v)
+  byteSize v = 4 + G.sum (G.map byteSize v)
 
 newtype FixedArray v a = FixedArray { fromFixedArray :: v a }
   deriving (Show, Eq, Generic)
@@ -53,7 +53,7 @@ instance (ByteSize a, G.Vector v a) => ByteSize (FixedArray v a) where
   byteSize (FixedArray v) = 4 + (fromIntegral (G.length v) * singleSize v undefined)
     where
       singleSize :: ByteSize b => f b -> b -> Int32
-      singleSize _ x = byteSize x
+      singleSize _ = byteSize
 
 
 data ErrorCode
@@ -76,6 +76,7 @@ data ErrorCode
   | NotCoordinatorForConsumer
   deriving (Show, Eq, Generic)
 
+
 instance Enum ErrorCode where
   toEnum c = case c of
     0 -> NoError
@@ -97,7 +98,7 @@ instance Enum ErrorCode where
     _ -> Unknown
   fromEnum c = case c of
     NoError -> 0
-    Unknown -> (-1)
+    Unknown -> -1
     OffsetOutOfRange -> 1
     InvalidMessage -> 2
     UnknownTopicOrPartition -> 3
@@ -162,7 +163,7 @@ instance Binary Utf8 where
     putByteString str
 
 instance ByteSize Utf8 where
-  byteSize (Utf8 bs) = 2 + (fromIntegral $ BS.length bs)
+  byteSize (Utf8 bs) = 2 + fromIntegral (BS.length bs)
 
 newtype Bytes = Bytes { fromBytes :: ByteString }
   deriving (Show, Eq)
@@ -176,7 +177,7 @@ instance Binary Bytes where
     putByteString bs
 
 instance ByteSize Bytes where
-  byteSize (Bytes bs) = 4 + (fromIntegral $ BS.length bs)
+  byteSize (Bytes bs) = 4 + fromIntegral (BS.length bs)
 
 data CompressionCodec = NoCompression
                       | GZip
@@ -326,10 +327,10 @@ putMessageSet = mapM_ put . messageSetMessages
 
 
 newtype GenerationId = GenerationId Int32
-  deriving (Show, Binary, ByteSize)
+  deriving (Eq, Show, Binary, ByteSize)
 
 newtype RetentionTime = RetentionTime Int64
-  deriving (Show, Binary, ByteSize)
+  deriving (Eq, Show, Binary, ByteSize)
 
 putL :: Binary a => Getter s a -> s -> Put
 putL l = put . view l
@@ -382,7 +383,6 @@ instance RequestApiKey OffsetFetch where
 
 instance RequestApiKey ConsumerMetadata where
   apiKey = theApiKey 10
-
 
 data Response v a = Response
   { responseCorrelationId :: !CorrelationId

@@ -172,3 +172,4 @@ class HasTopicPublishes s a | s -> a where
 
 class HasPartitionResults s a | s -> a where
   partitionResults :: Lens' s a
+

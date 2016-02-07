@@ -13,8 +13,6 @@ import           Network.Kafka.Types
 data family Commit (v :: Nat)
 data family CommitPartition (v :: Nat)
 
-
-
 data instance RequestMessage OffsetCommit 0 = OffsetCommitRequestV0
   { offsetCommitRequestV0ConsumerGroup :: !Utf8
   , offsetCommitRequestV0Commits       :: !(V.Vector (Commit 0))

@@ -2,7 +2,6 @@
 {-# LANGUAGE DeriveGeneric         #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE TemplateHaskell       #-}
 {-# LANGUAGE TypeFamilies          #-}
 module Network.Kafka.Primitive.ConsumerMetadata where
 import qualified Data.Vector as V
@@ -60,3 +59,4 @@ instance HasCoordinatorHost (ResponseMessage ConsumerMetadata 0) Utf8 where
 instance HasCoordinatorPort (ResponseMessage ConsumerMetadata 0) Int32 where
   coordinatorPort = lens consumerMetadataResponseV0CoordinatorPort (\s a -> s { consumerMetadataResponseV0CoordinatorPort = a })
   {-# INLINEABLE coordinatorPort #-}
+

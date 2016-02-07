@@ -5,6 +5,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 module Network.Kafka.Protocol where
 import           Control.Monad
+import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
 import           Data.Binary
 import           Data.Binary.Get
@@ -26,14 +27,26 @@ import           Network.Kafka.Primitive.Produce
 req :: CorrelationId -> Utf8 -> RequestMessage a v -> Request a v
 req = Request
 
-data KafkaClient = KafkaClient { kafkaSocket    :: Socket
-                               , kafkaLeftovers :: IORef BL.ByteString
-                               }
+data KafkaConnection = KafkaConnection
+  { kafkaSocket    :: Socket
+  , kafkaLeftovers :: IORef BS.ByteString
+  }
 
-withKafkaClient :: HostName -> ServiceName -> (KafkaClient -> IO a) -> IO a
-withKafkaClient h p f = connect h p $ \(s, _) -> do
-  ref <- newIORef =<< Lazy.getContents s
-  f $ KafkaClient s ref
+withKafkaConnection :: HostName -> ServiceName -> (KafkaConnection -> IO a) -> IO a
+withKafkaConnection h p f = connect h p $ \(s, _) -> do
+  ref <- newIORef BS.empty
+  f $ KafkaConnection s ref
+
+createKafkaConnection :: HostName -> ServiceName -> IO KafkaConnection
+createKafkaConnection h p = do
+  ref <- newIORef BS.empty
+  (s, _) <- connectSock h p
+  return $ KafkaConnection s ref
+
+closeKafkaConnection :: KafkaConnection -> IO ()
+closeKafkaConnection c = do
+  writeIORef (kafkaLeftovers c) $ error "Connection closed"
+  closeSock $ kafkaSocket c
 
 class (KnownNat v,
        ByteSize (RequestMessage p v),
@@ -48,7 +61,7 @@ instance KafkaAction Offset 0
 instance KafkaAction OffsetCommit 0
 instance KafkaAction OffsetCommit 1
 instance KafkaAction OffsetCommit 2
--- TODO make sure that v0 reads from Kafka
+-- TODO make sure that v0 reads from ZooKeeper
 instance KafkaAction OffsetFetch 0
 instance KafkaAction OffsetFetch 1
 instance KafkaAction Produce 0
@@ -58,13 +71,28 @@ withByteBoundary g = do
   bytesToRead <- fromIntegral <$> getWord32be
   isolate bytesToRead g
 
-send :: (KafkaAction p v) => KafkaClient -> Request p v -> IO (Response p v)
+-- | TODO, send hangs on produce with acks set to 0 since no response is sent in
+-- this case
+send :: (KafkaAction p v) => KafkaConnection -> Request p v -> IO (Response p v)
 send c req = do
-  void $ Lazy.send (kafkaSocket c) $ runPut $ do
-    put $ byteSize req
-    put req
+  let putVal = runPut $ do
+        put $ byteSize req
+        put req
+  void $ Lazy.send (kafkaSocket c) putVal
   left <- readIORef $ kafkaLeftovers c
-  case runGetOrFail (withByteBoundary get) left of
-    Left (_, _, err) -> error err
-    Right (rest, _, x) -> writeIORef (kafkaLeftovers c) rest >> return x
+  let d = runGetIncremental (withByteBoundary get)
+  go $ if BS.null left then d else pushChunk d left
+  where
+    go d = case d of
+      Fail consumed rem err -> do
+        error err -- TODO
+      Partial f -> recv (kafkaSocket c) 2048 >>= \x -> (go $ f x)
+      Done rest _ x -> writeIORef (kafkaLeftovers c) rest >> return x
+
+sendNoResponse :: (KafkaAction p v) => KafkaConnection -> Request p v -> IO ()
+sendNoResponse c req = do
+  let putVal = runPut $ do
+        put $ byteSize req
+        put req
+  void $ Lazy.send (kafkaSocket c) putVal
 

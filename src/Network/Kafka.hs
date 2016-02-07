@@ -34,7 +34,7 @@ import Network.Kafka.Types
 
 data KafkaState = KafkaState
   { kafkaStateSupply   :: !Supply
-  , kafkaStateClient   :: !KafkaClient
+  , kafkaStateClient   :: !KafkaConnection
   , kafkaStateClientId :: !Utf8
   }
 
@@ -66,7 +66,7 @@ getConsumerMetadata g = KafkaT $ do
     NoError -> Right $ Coordinator (F.view F.coordinatorId resp) (F.view (F.coordinatorHost . F.to (T.decodeUtf8 . fromUtf8)) resp) (F.view (F.coordinatorPort . F.to fromIntegral) resp)
     err -> Left err
 
-runKafkaT :: MonadIO m => KafkaClient -> T.Text -> KafkaT m a -> m a
+runKafkaT :: MonadIO m => KafkaConnection -> T.Text -> KafkaT m a -> m a
 runKafkaT client clientId m = do
   s <- liftIO newSupply
   evalStateT (execKafkaT m) (KafkaState s client $ Utf8 $ T.encodeUtf8 clientId) 

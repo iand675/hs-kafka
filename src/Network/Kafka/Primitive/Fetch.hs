@@ -7,6 +7,7 @@
 {-# LANGUAGE TypeFamilies          #-}
 module Network.Kafka.Primitive.Fetch where
 import qualified Data.Vector as V
+import           Data.Binary.Get
 import           Network.Kafka.Exports
 import           Network.Kafka.Types
 
@@ -18,7 +19,7 @@ data instance RequestMessage Fetch 0 = FetchRequestV0
   } deriving (Show, Eq, Generic)
 
 instance Binary (RequestMessage Fetch 0) where
-  get = FetchRequestV0 <$> get <*> get <*> get <*> (fromArray <$> get)
+  get = label "fetch" (FetchRequestV0 <$> get <*> get <*> get <*> (fromArray <$> get))
   put r = do
     putL replicaId r
     putL maxWaitTime r
@@ -99,66 +100,87 @@ instance HasMaxBytes PartitionFetch Int32 where
   {-# INLINEABLE maxBytes #-}
 
 data instance ResponseMessage Fetch 0 = FetchResponseV0
-  { fetchResponseV0Data :: !(V.Vector (FetchResult 0))
+  { fetchResponseV0Data :: !(V.Vector FetchResult)
   } deriving (Show, Eq, Generic)
 
 instance Binary (ResponseMessage Fetch 0) where
-  get = FetchResponseV0 <$> (fromArray <$> get)
+  get = label "fetch" (FetchResponseV0 <$> (fromArray <$> get))
   put (FetchResponseV0 p) = put $ Array p
 
 instance ByteSize (ResponseMessage Fetch 0) where
   byteSize (FetchResponseV0 p) = byteSize p
   {-# INLINE byteSize #-}
 
-instance HasData (ResponseMessage Fetch 0) (V.Vector (FetchResult 0)) where
+instance HasData (ResponseMessage Fetch 0) (V.Vector FetchResult) where
   _data = lens fetchResponseV0Data (\s a -> s { fetchResponseV0Data = a })
   {-# INLINEABLE _data #-}
 
-data family FetchResult (v :: Nat)
-
-data instance FetchResult 0 = FetchResultV0
-  { fetchResultV0Partition           :: !PartitionId
-  , fetchResultV0ErrorCode           :: !ErrorCode
-  , fetchResultV0HighwaterMarkOffset :: !Int64
-  , fetchResultV0MessageSet          :: !MessageSet
+data FetchResult = FetchResult
+  { fetchResultTopic            :: !Utf8
+  , fetchResultPartitionResults :: !(V.Vector FetchResultPartitionResults)
   } deriving (Show, Eq, Generic)
 
-instance Binary (FetchResult 0) where
-  get = do
-    p <- get
-    err <- get
-    hwmo <- get
-    mss <- get
-    ms <- getMessageSet mss
-    return $ FetchResultV0 p err hwmo ms
+instance HasTopic FetchResult Utf8 where
+  topic = lens fetchResultTopic (\s a -> s { fetchResultTopic = a })
 
+instance HasPartitionResults FetchResult (V.Vector FetchResultPartitionResults) where
+  partitionResults = lens fetchResultPartitionResults (\s a -> s { fetchResultPartitionResults = a })
+
+instance Binary FetchResult where
+  get = label "fetch result" $ (FetchResult <$> get <*> (fromArray <$> get))
   put r = do
-    putL partition r
-    putL errorCode r
-    putL highwaterMarkOffset r
-    let c = sum $ map byteSize $ messageSetMessages $ fetchResultV0MessageSet r
-    put (c :: Int32)
-    putMessageSet $ fetchResultV0MessageSet r
+    putL topic r
+    put (Array $ fetchResultPartitionResults r)
 
-instance ByteSize (FetchResult 0) where
+instance ByteSize FetchResult where
+  byteSize r = byteSizeL topic r +
+               byteSizeL partitionResults r
+
+instance ByteSize FetchResultPartitionResults where
   byteSize r = byteSizeL partition r +
                byteSizeL errorCode r +
                byteSizeL highwaterMarkOffset r +
                byteSize (byteSize $ view messageSet r) +
                byteSizeL messageSet r
 
-instance HasPartition (FetchResult 0) PartitionId where
-  partition = lens fetchResultV0Partition (\s a -> s { fetchResultV0Partition = a })
+data FetchResultPartitionResults = FetchResultPartitionResults
+  { fetchResultPartitionResultsPartition           :: !PartitionId
+  , fetchResultPartitionResultsErrorCode           :: !ErrorCode
+  , fetchResultPartitionResultsHighwaterMarkOffset :: !Int64
+  , fetchResultPartitionResultsMessageSet          :: !MessageSet
+  } deriving (Show, Eq, Generic)
+
+instance Binary FetchResultPartitionResults where
+  get = label "fetch result partition results" $ do
+    p <- get
+    err <- get
+    hwmo <- get
+    mss <- get
+    ms <- getMessageSet mss
+    return $ FetchResultPartitionResults p err hwmo ms
+
+  put r = do
+    putL partition r
+    putL errorCode r
+    putL highwaterMarkOffset r
+    let c = sum $ map byteSize $ messageSetMessages $ fetchResultPartitionResultsMessageSet r
+    put (c :: Int32)
+    putMessageSet $ fetchResultPartitionResultsMessageSet r
+    
+
+instance HasPartition FetchResultPartitionResults PartitionId where
+  partition = lens fetchResultPartitionResultsPartition (\s a -> s { fetchResultPartitionResultsPartition = a })
   {-# INLINEABLE partition #-}
 
-instance HasErrorCode (FetchResult 0) ErrorCode where
-  errorCode = lens fetchResultV0ErrorCode (\s a -> s { fetchResultV0ErrorCode = a })
+instance HasErrorCode FetchResultPartitionResults ErrorCode where
+  errorCode = lens fetchResultPartitionResultsErrorCode (\s a -> s { fetchResultPartitionResultsErrorCode = a })
   {-# INLINEABLE errorCode #-}
 
-instance HasHighwaterMarkOffset (FetchResult 0) Int64 where
-  highwaterMarkOffset = lens fetchResultV0HighwaterMarkOffset (\s a -> s { fetchResultV0HighwaterMarkOffset = a })
+instance HasHighwaterMarkOffset FetchResultPartitionResults Int64 where
+  highwaterMarkOffset = lens fetchResultPartitionResultsHighwaterMarkOffset (\s a -> s { fetchResultPartitionResultsHighwaterMarkOffset = a })
   {-# INLINEABLE highwaterMarkOffset #-}
 
-instance HasMessageSet (FetchResult 0) MessageSet where
-  messageSet = lens fetchResultV0MessageSet (\s a -> s { fetchResultV0MessageSet = a })
+instance HasMessageSet FetchResultPartitionResults MessageSet where
+  messageSet = lens fetchResultPartitionResultsMessageSet (\s a -> s { fetchResultPartitionResultsMessageSet = a })
   {-# INLINEABLE messageSet #-}
+

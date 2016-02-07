@@ -70,7 +70,7 @@ data instance RequestMessage Produce 0 = ProduceRequestV0
   { produceRequestV0RequiredAcks   :: !Int16
   , produceRequestV0Timeout        :: !Int32
   , produceRequestV0TopicPublishes :: !(V.Vector TopicPublish)
-  } deriving (Show, Eq)
+  } deriving (Show, Eq, Generic)
 
 instance Binary (RequestMessage Produce 0) where
   get = ProduceRequestV0 <$> get <*> get <*> (fromArray <$> get)
@@ -102,7 +102,7 @@ data PublishPartitionResult = PublishPartitionResult
   { publishPartitionResultPartition :: !PartitionId
   , publishPartitionResultErrorCode :: !ErrorCode
   , publishPartitionResultOffset    :: !Int64
-  } deriving (Generic)
+  } deriving (Show, Eq, Generic)
 
 instance Binary PublishPartitionResult
 instance ByteSize PublishPartitionResult where
@@ -127,7 +127,7 @@ instance HasOffset PublishPartitionResult Int64 where
 data PublishResult = PublishResult
   { publishResultTopic            :: !Utf8
   , publishResultPartitionResults :: !(V.Vector PublishPartitionResult)
-  }
+  } deriving (Show, Eq, Generic)
 
 instance Binary PublishResult where
   get = PublishResult <$> get <*> (fromArray <$> get)
@@ -151,7 +151,7 @@ instance HasPartitionResults PublishResult (V.Vector PublishPartitionResult) whe
 
 data instance ResponseMessage Produce 0 = ProduceResponseV0
   { produceResponseV0Results :: !(V.Vector PublishResult)
-  }
+  } deriving (Show, Eq, Generic)
 
 instance Binary (ResponseMessage Produce 0) where
   get = (ProduceResponseV0 . fromArray) <$> get

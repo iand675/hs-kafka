@@ -2,6 +2,7 @@
 {-# LANGUAGE TypeFamilies      #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts  #-}
+{-# LANGUAGE OverloadedStrings #-}
 module Main where
 
 import qualified Data.Binary as B
@@ -11,6 +12,7 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import qualified Data.Vector as V
 import Network.Kafka
+import Network.Kafka.Protocol
 import Network.Kafka.Primitive.ConsumerMetadata  
 import Network.Kafka.Primitive.Fetch
 import Network.Kafka.Primitive.Metadata
@@ -94,8 +96,13 @@ instance Arbitrary PartitionFetch where
               arbitrary <*>
               arbitrary
 
-instance Arbitrary (FetchResult 0) where
-  arbitrary = FetchResultV0 <$>
+instance Arbitrary FetchResult where
+  arbitrary = FetchResult <$>
+              arbitrary <*>
+              arbitrary
+
+instance Arbitrary FetchResultPartitionResults where
+  arbitrary = FetchResultPartitionResults <$>
               arbitrary <*>
               arbitrary <*>
               arbitrary <*>
@@ -290,6 +297,18 @@ instance Arbitrary ApiVersion where
 
 instance Arbitrary CorrelationId where
   arbitrary = CorrelationId <$> arbitrary
+
+-- produceAndConsume :: IO 
+produceAndConsume = withKafkaConnection "localhost" "9092" $ \conn -> do
+  let r = req (CorrelationId 0) (Utf8 "sample") $ ProduceRequestV0 1 0 $
+            V.fromList [ TopicPublish (Utf8 "hs-kafka-test-topic") $
+                         V.fromList
+                         [ PartitionMessages (PartitionId 0) $ MessageSet
+                           [ MessageSetItem 0 $ Message 0 (Attributes NoCompression) (Bytes "") (Bytes "hello")
+                           ]
+                         ]
+                       ]
+  send conn r
 
 roundTrip :: (Eq a, B.Binary a) => a -> Bool
 roundTrip x = x == B.decode (B.encode x)

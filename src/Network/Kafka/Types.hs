@@ -9,6 +9,8 @@
 {-# LANGUAGE TypeFamilies               #-}
 {-# LANGUAGE UndecidableInstances       #-}
 module Network.Kafka.Types where
+import           Control.Applicative
+import           Control.Monad
 import           Data.Binary
 import           Data.Binary.Get
 import           Data.Binary.Put
@@ -18,6 +20,7 @@ import           Data.Digest.CRC32
 import           Data.Int
 import qualified Data.Vector as V
 import qualified Data.Vector.Generic as G
+import           Debug.Trace
 import           GHC.Generics hiding (to)
 import           GHC.TypeLits
 import           Network.Kafka.Exports
@@ -30,10 +33,10 @@ newtype Array v a = Array { fromArray :: v a }
 
 instance (Binary a, G.Vector v a) => Binary (Array v a) where
   get = do
-    len <- fromIntegral <$> getWord32be
+    len <- fromIntegral <$> getInt32be
     Array <$> G.replicateM len get
   put (Array v) = do
-    putWord32be $ fromIntegral $ G.length v
+    putInt32be $ fromIntegral $ G.length v
     G.mapM_ put v
 
 instance (ByteSize a, Functor f, Foldable f) => ByteSize (Array f a) where
@@ -156,11 +159,13 @@ newtype Utf8 = Utf8 { fromUtf8 :: ByteString }
 
 instance Binary Utf8 where
   get = do
-    len <- fromIntegral <$> getWord16be
+    len <- fromIntegral <$> getInt16be
     Utf8 <$> getByteString len
-  put (Utf8 str) = do
-    putWord16be $ fromIntegral $ BS.length str
-    putByteString str
+  put (Utf8 str) = if BS.null str
+    then putInt16be (-1)
+    else do
+      putInt16be $ fromIntegral $ BS.length str
+      putByteString str
 
 instance ByteSize Utf8 where
   byteSize (Utf8 bs) = 2 + fromIntegral (BS.length bs)
@@ -170,11 +175,15 @@ newtype Bytes = Bytes { fromBytes :: ByteString }
 
 instance Binary Bytes where
   get = do
-    len <- fromIntegral <$> getWord32be
-    Bytes <$> getByteString len
-  put (Bytes bs) = do
-    putWord32be $ fromIntegral $ BS.length bs
-    putByteString bs
+    len <- fromIntegral <$> getInt32be
+    if len == -1
+      then pure $ Bytes BS.empty
+      else Bytes <$> getByteString len
+  put (Bytes bs) = if BS.null bs
+    then putInt32be (-1)
+    else do
+      putInt32be $ fromIntegral $ BS.length bs
+      putByteString bs
 
 instance ByteSize Bytes where
   byteSize (Bytes bs) = 4 + fromIntegral (BS.length bs)
@@ -234,10 +243,10 @@ instance ByteSize Message where
   {-# INLINE byteSize #-}
 
 instance Binary Message where
-  get = do
+  get = label "message" $ do
     crc <- get :: Get Word32
     bsStart <- bytesRead
-    (msg, bsEnd) <- lookAhead $ do
+    (msg, bsEnd) <- label "message body crc section" $ lookAhead $ do
       msg <- Message <$> get <*> get <*> get <*> get
       bsEnd <- bytesRead
       return (msg, bsEnd)
@@ -278,10 +287,10 @@ data MessageSetItem = MessageSetItem
   } deriving (Show, Eq, Generic)
 
 instance Binary MessageSetItem where
-  get = do
-    o <- get
-    s <- get :: Get Int32
-    m <- isolate (fromIntegral s) get
+  get = label "message set item" $ do
+    o <- label "offset" $ get
+    s <- label "message size" $ (get :: Get Int32)
+    m <- label "message" $ isolate (fromIntegral s) get
     return $ MessageSetItem o m
   {-# INLINE get #-}
   put i = do
@@ -312,15 +321,21 @@ instance ByteSize MessageSet where
   byteSize = sum . map byteSize . messageSetMessages
 
 getMessageSet :: Int32 -> Get MessageSet
-getMessageSet c = fmap (MessageSet . reverse) $ isolate (fromIntegral c) $ go []
+getMessageSet c = label ("message set " ++ show c) $ fmap (MessageSet . reverse) $ isolate (fromIntegral c) $ go []
   where
     go xs = do
       pred <- isEmpty
       if pred
         then return xs
         else do
-          x <- get
-          go (x:xs)
+          mx <- optional get
+          case mx of
+            Nothing -> do
+              consumed <- bytesRead
+              let rem = traceShowId (c - fromIntegral consumed)
+              void $ getByteString $ fromIntegral rem
+              return xs
+            Just x -> go (x:xs)
 
 putMessageSet :: MessageSet -> Put
 putMessageSet = mapM_ put . messageSetMessages
@@ -345,7 +360,7 @@ deriving instance (Show (RequestMessage a v)) => Show (Request a v)
 deriving instance (Eq (RequestMessage a v)) => Eq (Request a v)
 
 instance (KnownNat v, RequestApiKey a, ByteSize (RequestMessage a v), Binary (RequestMessage a v)) => Binary (Request a v) where
-  get = do
+  get = label "request message" $ do
     _ <- get :: Get ApiKey
     _ <- get :: Get ApiVersion
     Request <$> get <*> get <*> get
@@ -390,7 +405,7 @@ data Response v a = Response
   } deriving (Generic)
 
 instance (KnownNat v, RequestApiKey a, ByteSize (ResponseMessage a v), Binary (ResponseMessage a v)) => Binary (Response a v) where
-  get = Response <$> get <*> get
+  get = label "response message" (Response <$> get <*> get)
   put p = do
     put $ responseCorrelationId p
     put $ responseMessage p

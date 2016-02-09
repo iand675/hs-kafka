@@ -10,59 +10,49 @@ import qualified Data.Text.Encoding as T
 import qualified Data.Vector as V
 import Network.Kafka.Protocol
 import Network.Kafka.Primitive.Fetch
+import Network.Kafka.Primitive.GroupCoordinator
 import Network.Kafka.Primitive.Metadata
+import Network.Kafka.Primitive.Offset
+import Network.Kafka.Primitive.OffsetCommit
+import Network.Kafka.Primitive.OffsetFetch
+import Network.Kafka.Primitive.Produce
 import Network.Kafka.Types
 
-newtype Kafka a = Kafka (StateT KafkaConfig IO a)
-  deriving (Functor, Applicative, Monad)
-
-data KafkaConfig = KafkaConfig
-  { kafkaConfigConnection       :: KafkaConnection
-  , kafkaConfigFetchMaxWaitTime :: !Int32
-  , kafkaConfigFetchMinBytes    :: !Int32
-  , kafkaConfigFetchMaxBytes    :: !Int32
-  }
-
-defaultConfig :: KafkaConnection -> KafkaConfig
-defaultConfig c = KafkaConfig
-  { kafkaConfigConnection = c
-  , kafkaConfigFetchMaxWaitTime = 100
-  , kafkaConfigFetchMinBytes    = 0
-  , kafkaConfigFetchMaxBytes    = 1048576
-  }
-
 localKafka :: Kafka a -> IO a
-localKafka k = withKafkaConnection "localhost" "9092" $ \c ->
-  runKafka (defaultConfig c) k
+localKafka k = withKafkaConnection "localhost" "9092" defaultConfig $ \c ->
+  runKafka (KafkaContext c defaultConfig) k
 
-runKafka :: KafkaConfig -> Kafka a -> IO a
+runKafka :: KafkaContext -> Kafka a -> IO a
 runKafka c (Kafka m) = evalStateT m c
 
-internal :: KafkaAction a v => RequestMessage a v -> Kafka (ResponseMessage a v)
+internal :: KafkaAction req resp => req -> Kafka resp
 internal r = Kafka $ do
   c <- get
-  fmap responseMessage $ liftIO $ send (kafkaConfigConnection c) $ req (CorrelationId 0) (Utf8 "client") r
+  liftIO $ send (kafkaContextConnection c) (kafkaContextConfig c) r
 
-fetch :: V.Vector TopicFetch -> Kafka (ResponseMessage Fetch 0)
+groupCoordinator :: T.Text -> Kafka GroupCoordinatorResponseV0
+groupCoordinator t = internal $ GroupCoordinatorRequestV0 $ Utf8 (T.encodeUtf8 t)
+
+fetch :: V.Vector TopicFetch -> Kafka (V.Vector FetchResult)
 fetch fs = do
-  c <- Kafka get
-  internal (FetchRequestV0 (NodeId (-1))
-                           (kafkaConfigFetchMaxWaitTime c)
-                           (kafkaConfigFetchMinBytes c)
-                           fs)
+  c <- kafkaContextConfig <$> Kafka get
+  fetchResponseV0_Data <$> internal (FetchRequestV0 (NodeId (-1)) -- -1 is a specific value for non-brokers
+                                                    (fromIntegral $ kafkaConfigFetchMaxWaitTime c)
+                                                    (fromIntegral $ kafkaConfigFetchMinBytes c)
+                                                    fs)
 
-metadata :: V.Vector T.Text -> Kafka (ResponseMessage Metadata 0)
+metadata :: V.Vector T.Text -> Kafka MetadataResponseV0
 metadata = internal . MetadataRequestV0 . V.map (Utf8 . T.encodeUtf8)
 
-offset :: RequestMessage Offset 0 -> Kafka (ResponseMessage Offset 0)
-offset = internal
+offset :: OffsetRequestV0 -> Kafka (V.Vector PartitionOffsetResponseInfo)
+offset = fmap offsetResponseV0Offsets . internal
 
-offsetCommit :: RequestMessage OffsetCommit 2 -> Kafka (ResponseMessage OffsetCommit 2)
-offsetCommit = internal
+offsetCommit :: OffsetCommitRequestV2 -> Kafka (V.Vector CommitTopicResult)
+offsetCommit = fmap offsetCommitResponseV2Results . internal
 
-offsetFetch :: RequestMessage OffsetFetch 1 -> Kafka (ResponseMessage OffsetFetch 1)
-offsetFetch = internal
+offsetFetch :: OffsetFetchRequestV1 -> Kafka (V.Vector TopicOffsetResponse)
+offsetFetch = fmap offsetFetchResponseV1Topics . internal
 
-produce :: RequestMessage Produce 0 -> Kafka (ResponseMessage Produce 0)
-produce = internal
+produce :: ProduceRequestV0 -> Kafka (V.Vector PublishResult)
+produce = fmap produceResponseV0Results . internal
 

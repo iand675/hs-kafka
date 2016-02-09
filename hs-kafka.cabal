@@ -17,14 +17,13 @@ build-type:          Simple
 cabal-version:       >=1.10
 
 library
-  exposed-modules:     Network.Kafka,
-                       Network.Kafka.Simple,
+  exposed-modules:     Network.Kafka.Simple,
                        Network.Kafka.Exports,
                        Network.Kafka.Fields,
                        Network.Kafka.Protocol,
-                       Network.Kafka.Primitive.ConsumerMetadata,
                        Network.Kafka.Primitive.Fetch,
                        Network.Kafka.Primitive.Metadata,
+                       Network.Kafka.Primitive.GroupCoordinator,
                        Network.Kafka.Primitive.Offset,
                        Network.Kafka.Primitive.OffsetCommit,
                        Network.Kafka.Primitive.OffsetFetch,
@@ -57,6 +56,8 @@ library
                      , mtl
                      , transformers
                      , lens
+                     , stm
+                     , containers
   hs-source-dirs:      src
   default-language:    Haskell2010
 

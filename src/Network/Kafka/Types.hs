@@ -2,14 +2,18 @@
 {-# LANGUAGE DeriveGeneric              #-}
 {-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE FunctionalDependencies     #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE RankNTypes                 #-}
 {-# LANGUAGE StandaloneDeriving         #-}
+{-# LANGUAGE TemplateHaskell            #-}
 {-# LANGUAGE TypeFamilies               #-}
 {-# LANGUAGE UndecidableInstances       #-}
+{-# LANGUAGE OverloadedStrings          #-}
 module Network.Kafka.Types where
 import           Control.Applicative
+import           Control.Lens
 import           Control.Monad
 import           Data.Binary
 import           Data.Binary.Get
@@ -18,15 +22,206 @@ import           Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import           Data.Digest.CRC32
 import           Data.Int
+import qualified Data.IntMap.Strict as I
+import           Data.IORef
 import qualified Data.Vector as V
 import qualified Data.Vector.Generic as G
 import           Debug.Trace
 import           GHC.Generics hiding (to)
 import           GHC.TypeLits
+import           Network.Simple.TCP (HostName, ServiceName, Socket)
 import           Network.Kafka.Exports
 import           Network.Kafka.Fields
 
 import           Debug.Trace
+
+newtype CorrelationId = CorrelationId { fromCorrelationId :: Int32 }
+  deriving (Show, Eq, Ord, Binary, ByteSize)
+
+newtype Utf8 = Utf8 { fromUtf8 :: ByteString }
+  deriving (Show, Eq)
+
+instance Binary Utf8 where
+  get = do
+    len <- fromIntegral <$> getInt16be
+    Utf8 <$> getByteString len
+  put (Utf8 str) = if BS.null str
+    then putInt16be (-1)
+    else do
+      putInt16be $ fromIntegral $ BS.length str
+      putByteString str
+
+instance ByteSize Utf8 where
+  byteSize (Utf8 bs) = 2 + fromIntegral (BS.length bs)
+
+data Acks
+  = All
+  | LeaderOnly
+  | NoAck
+
+data ResetPolicy
+  = Earliest
+  | Latest
+  | None
+  | Anything
+
+data KafkaConfig = KafkaConfig
+  { kafkaConfigFetchMaxWaitTime                 :: !Int
+  , kafkaConfigFetchMinBytes                    :: !Int
+  , kafkaConfigFetchMaxBytes                    :: !Int
+  , kafkaConfigBootstrapServers                 :: !(V.Vector (HostName, ServiceName))
+  , kafkaConfigAcks                             :: !Acks
+  , kafkaConfigBufferMemory                     :: !Int
+  , kafkaConfigRetries                          :: !Int
+  , kafkaConfigBatchSize                        :: !Int
+  , kafkaConfigClientId                         :: !Utf8
+  , kafkaConfigGroupId                          :: !Utf8
+  , kafkaConfigClientMaxIdleMs                  :: !Int
+  , kafkaConfigLingerMs                         :: !Int
+  , kafkaConfigMaxRequestSize                   :: !Int
+  , kafkaConfigReceiveBufferBytes               :: !Int
+  , kafkaConfigSendBufferBytes                  :: !Int
+  , kafkaConfigBlockOnBufferFull                :: !Bool
+  , kafkaConfigMaxInFlightRequestsPerConnection :: !Int
+  , kafkaConfigMetadataFetchTimeout             :: !Int
+  , kafkaConfigMetadataMaxAgeMs                 :: !Int
+  , kafkaConfigReconnectBackoffMs               :: !Int
+  , kafkaConfigRetryBackoffMs                   :: !Int
+  , kafkaConfigHeartbeatIntervalMs              :: !Int
+  , kafkaConfigMaxPartitionFetchBytes           :: !Int
+  , kafkaConfigSessionTimeout                   :: !Int
+  , kafkaConfigAutoOffsetReset                  :: !ResetPolicy
+  , kafkaConfigConnectionMaxIdleMs              :: !Int
+  , kafkaConfigEnableAutoCommit                 :: !Bool
+  , kafkaConfigAutoCommitInterval               :: !Int
+  , kafkaConfigCheckCrcs                        :: !Bool
+  }
+
+makeFields ''KafkaConfig
+
+defaultConfig :: KafkaConfig
+defaultConfig = KafkaConfig
+  { kafkaConfigFetchMaxWaitTime                 = 500
+  , kafkaConfigFetchMinBytes                    = 1024
+  , kafkaConfigFetchMaxBytes                    = 1024 * 1024
+  , kafkaConfigBootstrapServers                 = V.empty
+  , kafkaConfigAcks                             = LeaderOnly
+  , kafkaConfigBufferMemory                     = 33554432
+  , kafkaConfigRetries                          = 0
+  , kafkaConfigBatchSize                        = 16384
+  , kafkaConfigClientId                         = Utf8 "hi"
+  , kafkaConfigGroupId                          = Utf8 ""
+  , kafkaConfigClientMaxIdleMs                  = 540000
+  , kafkaConfigLingerMs                         = 0
+  , kafkaConfigMaxRequestSize                   = 1048576
+  , kafkaConfigReceiveBufferBytes               = 32768
+  , kafkaConfigSendBufferBytes                  = 131072
+  , kafkaConfigBlockOnBufferFull                = False
+  , kafkaConfigMaxInFlightRequestsPerConnection = 5
+  , kafkaConfigMetadataFetchTimeout             = 60000
+  , kafkaConfigMetadataMaxAgeMs                 = 300000
+  , kafkaConfigReconnectBackoffMs               = 50
+  , kafkaConfigRetryBackoffMs                   = 100
+  , kafkaConfigHeartbeatIntervalMs              = 3000
+  , kafkaConfigMaxPartitionFetchBytes           = 1048576
+  , kafkaConfigSessionTimeout                   = 30000
+  , kafkaConfigAutoOffsetReset                  = Latest
+  , kafkaConfigConnectionMaxIdleMs              = 540000
+  , kafkaConfigEnableAutoCommit                 = True
+  , kafkaConfigAutoCommitInterval               = 5000
+  , kafkaConfigCheckCrcs                        = True
+  }
+
+putL :: Binary a => Getter s a -> s -> Put
+putL l = put . view l
+
+data Produce
+data Fetch
+data Offset
+data Metadata
+data OffsetCommit
+data OffsetFetch
+data GroupCoordinator
+data JoinGroup
+data Heartbeat
+data LeaveGroup
+data SyncGroup
+data DescribeGroups
+data ListGroups
+
+newtype ApiKey = ApiKey { fromApiKey :: Int16 }
+  deriving (Show, Eq, Ord, Binary, ByteSize)
+
+theApiKey :: Int16 -> a -> ApiKey
+theApiKey x = const $ ApiKey x
+
+class RequestApiKey req where
+  apiKey :: Request req -> ApiKey
+
+instance RequestApiKey JoinGroup where
+  apiKey = theApiKey 11
+
+instance RequestApiKey Heartbeat where
+  apiKey = theApiKey 12
+
+instance RequestApiKey LeaveGroup where
+  apiKey = theApiKey 13
+
+instance RequestApiKey SyncGroup where
+  apiKey = theApiKey 14
+
+instance RequestApiKey DescribeGroups where
+  apiKey = theApiKey 15
+
+instance RequestApiKey ListGroups where
+  apiKey = theApiKey 16
+
+newtype Bytes = Bytes { fromBytes :: ByteString }
+  deriving (Show, Eq)
+
+instance Binary Bytes where
+  get = do
+    len <- fromIntegral <$> getInt32be
+    if len == -1
+      then pure $ Bytes BS.empty
+      else Bytes <$> getByteString len
+  put (Bytes bs) = if BS.null bs
+    then putInt32be (-1)
+    else do
+      putInt32be $ fromIntegral $ BS.length bs
+      putByteString bs
+
+instance ByteSize Bytes where
+  byteSize (Bytes bs) = 4 + fromIntegral (BS.length bs)
+
+data Request req = Request
+  { requestCorrelationId :: !CorrelationId
+  , requestClientId      :: !Utf8
+  , requestMessage       :: !req
+  } deriving (Show, Eq, Generic)
+
+makeFields ''Request
+
+instance (RequestApiVersion req,
+          RequestApiKey req,
+          ByteSize req,
+          Binary req) => Binary (Request req) where
+  get = label "request message" $ do
+    _ <- get :: Get ApiKey
+    _ <- get :: Get ApiVersion
+    Request <$> get <*> get <*> get
+  put p = do
+    put $ apiKey p
+    put $ apiVersion p
+    put $ requestCorrelationId p
+    put $ requestClientId p
+    put $ requestMessage p
+
+class RequestApiVersion req where
+  apiVersion :: req -> ApiVersion
+
+instance RequestApiVersion req => RequestApiVersion (Request req) where
+  apiVersion r = apiVersion $ requestMessage r
 
 newtype Array v a = Array { fromArray :: v a }
   deriving (Show, Eq, Generic)
@@ -63,7 +258,7 @@ data ErrorCode
   = NoError
   | Unknown
   | OffsetOutOfRange
-  | InvalidMessage
+  | CorruptMessage
   | UnknownTopicOrPartition
   | InvalidMessageSize
   | LeaderNotAvailable
@@ -74,17 +269,45 @@ data ErrorCode
   | MessageSizeTooLarge
   | StaleControllerEpoch
   | OffsetMetadataTooLarge
-  | OffsetsLoadInProgress
-  | ConsumerCoordinatorNotAvailable
-  | NotCoordinatorForConsumer
+  | GroupLoadInProgress
+  | GroupCoordinatorNotAvailable
+  | NotCoordinatorForGroup
+  | InvalidTopic
+  | RecordListTooLarge
+  | NotEnoughReplicas
+  | NotEnoughReplicasAfterAppend
+  | InvalidRequiredAcks
+  | IllegalGeneration
+  | InconsistentGroupProtocol
+  | InvalidGroupId
+  | UnknownMemberId
+  | InvalidSessionTimeout
+  | RebalanceInProgress
+  | InvalidCommitOffsetSize
+  | TopicAuthorizationFailed
+  | GroupAuthorizationFailed
+  | ClusterAuthorizationFailed
   deriving (Show, Eq, Generic)
 
+retriable :: ErrorCode -> Bool
+retriable c = case c of
+  CorruptMessage -> True
+  UnknownTopicOrPartition -> True
+  LeaderNotAvailable -> True
+  NotLeaderForPartition -> True
+  RequestTimedOut -> True
+  GroupLoadInProgress -> True
+  GroupCoordinatorNotAvailable -> True
+  NotCoordinatorForGroup -> True
+  NotEnoughReplicas -> True
+  NotEnoughReplicasAfterAppend -> True
+  _ -> False
 
 instance Enum ErrorCode where
   toEnum c = case c of
     0 -> NoError
     1 -> OffsetOutOfRange
-    2 -> InvalidMessage
+    2 -> CorruptMessage
     3 -> UnknownTopicOrPartition
     4 -> InvalidMessageSize
     5 -> LeaderNotAvailable
@@ -95,28 +318,59 @@ instance Enum ErrorCode where
     10 -> MessageSizeTooLarge
     11 -> StaleControllerEpoch
     12 -> OffsetMetadataTooLarge
-    14 -> OffsetsLoadInProgress
-    15 -> ConsumerCoordinatorNotAvailable
-    16 -> NotCoordinatorForConsumer
+    14 -> GroupLoadInProgress
+    15 -> GroupCoordinatorNotAvailable
+    16 -> NotCoordinatorForGroup
+    17 -> InvalidTopic
+    18 -> RecordListTooLarge
+    19 -> NotEnoughReplicas
+    20 -> NotEnoughReplicasAfterAppend
+    21 -> InvalidRequiredAcks
+    22 -> IllegalGeneration
+    23 -> InconsistentGroupProtocol
+    24 -> InvalidGroupId
+    25 -> UnknownMemberId
+    26 -> InvalidSessionTimeout
+    27 -> RebalanceInProgress
+    28 -> InvalidCommitOffsetSize
+    29 -> TopicAuthorizationFailed
+    30 -> GroupAuthorizationFailed
+    31 -> ClusterAuthorizationFailed
+    
     _ -> Unknown
   fromEnum c = case c of
-    NoError -> 0
-    Unknown -> -1
-    OffsetOutOfRange -> 1
-    InvalidMessage -> 2
-    UnknownTopicOrPartition -> 3
-    InvalidMessageSize -> 4
-    LeaderNotAvailable -> 5
-    NotLeaderForPartition -> 6
-    RequestTimedOut -> 7
-    BrokerNotAvailable -> 8
-    ReplicaNotAvailable -> 9
-    MessageSizeTooLarge -> 10
-    StaleControllerEpoch -> 11
-    OffsetMetadataTooLarge -> 12
-    OffsetsLoadInProgress -> 14
-    ConsumerCoordinatorNotAvailable -> 15
-    NotCoordinatorForConsumer -> 16
+    NoError                      -> 0
+    Unknown                      -> -1
+    OffsetOutOfRange             -> 1
+    CorruptMessage               -> 2
+    UnknownTopicOrPartition      -> 3
+    InvalidMessageSize           -> 4
+    LeaderNotAvailable           -> 5
+    NotLeaderForPartition        -> 6
+    RequestTimedOut              -> 7
+    BrokerNotAvailable           -> 8
+    ReplicaNotAvailable          -> 9
+    MessageSizeTooLarge          -> 10
+    StaleControllerEpoch         -> 11
+    OffsetMetadataTooLarge       -> 12
+    GroupLoadInProgress          -> 14
+    GroupCoordinatorNotAvailable -> 15
+    NotCoordinatorForGroup       -> 16
+    InvalidTopic                 -> 17
+    RecordListTooLarge           -> 18
+    NotEnoughReplicas            -> 19
+    NotEnoughReplicasAfterAppend -> 20
+    InvalidRequiredAcks          -> 21
+    IllegalGeneration            -> 22
+    InconsistentGroupProtocol    -> 23
+    InvalidGroupId               -> 24
+    UnknownMemberId              -> 25
+    InvalidSessionTimeout        -> 26
+    RebalanceInProgress          -> 27
+    InvalidCommitOffsetSize      -> 28
+    TopicAuthorizationFailed     -> 29
+    GroupAuthorizationFailed     -> 30
+    ClusterAuthorizationFailed   -> 31
 
 instance Binary ErrorCode where
   get = (toEnum . fromIntegral) <$> (get :: Get Int16)
@@ -126,16 +380,8 @@ instance ByteSize ErrorCode where
   byteSize = const 2
 
 
-newtype ApiKey = ApiKey { fromApiKey :: Int16 }
-  deriving (Show, Eq, Ord, Binary, ByteSize)
-
-
 newtype ApiVersion = ApiVersion { fromApiVersion :: Int16 }
-  deriving (Show, Eq, Ord, Binary, ByteSize)
-
-
-newtype CorrelationId = CorrelationId { fromCorrelationId :: Int32 }
-  deriving (Show, Eq, Ord, Binary, ByteSize)
+  deriving (Show, Eq, Ord, Binary, ByteSize, Num)
 
 
 newtype CoordinatorId = CoordinatorId { fromCoordinatorId :: Int32 }
@@ -152,41 +398,6 @@ newtype PartitionId = PartitionId { fromPartitionId :: Int32 }
 newtype ConsumerId = ConsumerId { fromConsumerId :: Utf8 }
   deriving (Show, Eq, Binary, ByteSize)
 
-
-newtype Utf8 = Utf8 { fromUtf8 :: ByteString }
-  deriving (Show, Eq)
-
-
-instance Binary Utf8 where
-  get = do
-    len <- fromIntegral <$> getInt16be
-    Utf8 <$> getByteString len
-  put (Utf8 str) = if BS.null str
-    then putInt16be (-1)
-    else do
-      putInt16be $ fromIntegral $ BS.length str
-      putByteString str
-
-instance ByteSize Utf8 where
-  byteSize (Utf8 bs) = 2 + fromIntegral (BS.length bs)
-
-newtype Bytes = Bytes { fromBytes :: ByteString }
-  deriving (Show, Eq)
-
-instance Binary Bytes where
-  get = do
-    len <- fromIntegral <$> getInt32be
-    if len == -1
-      then pure $ Bytes BS.empty
-      else Bytes <$> getByteString len
-  put (Bytes bs) = if BS.null bs
-    then putInt32be (-1)
-    else do
-      putInt32be $ fromIntegral $ BS.length bs
-      putByteString bs
-
-instance ByteSize Bytes where
-  byteSize (Bytes bs) = 4 + fromIntegral (BS.length bs)
 
 data CompressionCodec = NoCompression
                       | GZip
@@ -215,17 +426,6 @@ instance Binary Attributes where
           Snappy        -> 2
     put (x :: Int8)
 
-data family RequestMessage p (v :: Nat)
-data family ResponseMessage p (v :: Nat)
-
-data ConsumerMetadata
-data Produce
-data Fetch
-data Metadata
-data Offset
-data OffsetCommit
-data OffsetFetch
-
 data Message = Message
   -- messageCrc would go here
   { messageMagicByte  :: !Int8
@@ -233,6 +433,8 @@ data Message = Message
   , messageKey        :: !Bytes
   , messageValue      :: !Bytes
   } deriving (Show, Eq, Generic)
+
+makeFields ''Message
 
 instance ByteSize Message where
   byteSize m = 4 + -- crc
@@ -265,26 +467,13 @@ instance Binary Message where
     put msgCrc
     putLazyByteString rest
 
-instance HasMagicByte Message Int8 where
-  magicByte = lens messageMagicByte (\s a -> s { messageMagicByte = a })
-  {-# INLINEABLE magicByte #-}
-
-instance HasAttributes Message Attributes where
-  attributes = lens messageAttributes (\s a -> s { messageAttributes = a })
-  {-# INLINEABLE attributes #-}
-
-instance HasKey Message ByteString where
-  key = lens (fromBytes . messageKey) (\s a -> s { messageKey = Bytes a })
-  {-# INLINEABLE key #-}
-
-instance HasValue Message ByteString where
-  value = lens (fromBytes . messageValue) (\s a -> s { messageValue = Bytes a })
-  {-# INLINEABLE value #-}
 
 data MessageSetItem = MessageSetItem
   { messageSetItemOffset  :: !Int64
   , messageSetItemMessage :: !Message
   } deriving (Show, Eq, Generic)
+
+makeFields ''MessageSetItem
 
 instance Binary MessageSetItem where
   get = label "message set item" $ do
@@ -293,6 +482,7 @@ instance Binary MessageSetItem where
     m <- label "message" $ isolate (fromIntegral s) get
     return $ MessageSetItem o m
   {-# INLINE get #-}
+
   put i = do
     putL offset i
     putL (message . to byteSize) i
@@ -305,17 +495,11 @@ instance ByteSize MessageSetItem where
                byteSizeL message m
   {-# INLINE byteSize #-}
 
-instance HasOffset MessageSetItem Int64 where
-  offset = lens messageSetItemOffset (\s a -> s { messageSetItemOffset = a })
-  {-# INLINEABLE offset #-}
-
-instance HasMessage MessageSetItem Message where
-  message = lens messageSetItemMessage (\s a -> s { messageSetItemMessage = a })
-  {-# INLINEABLE message #-}
-
 newtype MessageSet = MessageSet
   { messageSetMessages :: [MessageSetItem]
   } deriving (Show, Eq)
+
+makeFields ''MessageSet
 
 instance ByteSize MessageSet where
   byteSize = sum . map byteSize . messageSetMessages
@@ -347,79 +531,26 @@ newtype GenerationId = GenerationId Int32
 newtype RetentionTime = RetentionTime Int64
   deriving (Eq, Show, Binary, ByteSize)
 
-putL :: Binary a => Getter s a -> s -> Put
-putL l = put . view l
-
-data Request a v = Request
-  { requestCorrelationId :: !CorrelationId
-  , requestClientId      :: !Utf8
-  , requestMessage       :: !(RequestMessage a v)
-  } deriving (Generic)
-
-deriving instance (Show (RequestMessage a v)) => Show (Request a v)
-deriving instance (Eq (RequestMessage a v)) => Eq (Request a v)
-
-instance (KnownNat v, RequestApiKey a, ByteSize (RequestMessage a v), Binary (RequestMessage a v)) => Binary (Request a v) where
-  get = label "request message" $ do
-    _ <- get :: Get ApiKey
-    _ <- get :: Get ApiVersion
-    Request <$> get <*> get <*> get
-  put p = do
-    put $ apiKey p
-    put $ ApiVersion $ fromIntegral $ natVal p
-    put $ requestCorrelationId p
-    put $ requestClientId p
-    put $ requestMessage p
-
-
-theApiKey :: Int16 -> a -> ApiKey
-theApiKey x = const $ ApiKey x
-
-class RequestApiKey p where
-  apiKey :: Request p v -> ApiKey
-
-instance RequestApiKey Produce where
-  apiKey = theApiKey 0
-
-instance RequestApiKey Fetch where
-  apiKey = theApiKey 1
-
-instance RequestApiKey Offset where
-  apiKey = theApiKey 2
-
-instance RequestApiKey Metadata where
-  apiKey = theApiKey 3
-
-instance RequestApiKey OffsetCommit where
-  apiKey = theApiKey 8
-
-instance RequestApiKey OffsetFetch where
-  apiKey = theApiKey 9
-
-instance RequestApiKey ConsumerMetadata where
-  apiKey = theApiKey 10
-
-data Response v a = Response
+data Response resp = Response
   { responseCorrelationId :: !CorrelationId
-  , responseMessage       :: !(ResponseMessage v a)
-  } deriving (Generic)
+  , responseMessage       :: !resp
+  } deriving (Show, Eq, Generic)
 
-instance (KnownNat v, RequestApiKey a, ByteSize (ResponseMessage a v), Binary (ResponseMessage a v)) => Binary (Response a v) where
+makeFields ''Response
+
+instance (ByteSize resp, Binary resp) => Binary (Response resp) where
   get = label "response message" (Response <$> get <*> get)
   put p = do
     put $ responseCorrelationId p
     put $ responseMessage p
 
-deriving instance (Show (ResponseMessage a v)) => Show (Response a v)
-deriving instance (Eq (ResponseMessage a v)) => Eq (Response a v)
-
-instance (ByteSize (ResponseMessage a v)) => ByteSize (Response a v) where
+instance (ByteSize resp) => ByteSize (Response resp) where
   byteSize p = byteSize (responseCorrelationId p) +
                byteSize (responseMessage p)
 
-instance (KnownNat v, ByteSize (RequestMessage a v)) => ByteSize (Request a v) where
+instance (ByteSize req, RequestApiVersion req) => ByteSize (Request req) where
   byteSize p = byteSize (undefined :: ApiKey) +
-               byteSize (ApiVersion $ fromIntegral $ natVal p) +
+               byteSize (apiVersion p) +
                byteSize (requestCorrelationId p) +
                byteSize (requestClientId p) +
                byteSize (requestMessage p)

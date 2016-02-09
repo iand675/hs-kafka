@@ -3,16 +3,9 @@
 {-# LANGUAGE RankNTypes             #-}
 module Network.Kafka.Fields where
 import Control.Applicative
+import Control.Lens
 import Data.Functor.Contravariant
 import Data.Profunctor
-
-type Getter s a = forall f. (Contravariant f, Functor f) => (a -> f a) -> s -> f s
-type Lens s t a b = forall f. Functor f => (a -> f b) -> s -> f t
-type Lens' s a = Lens s s a a
-
-lens :: (s -> a) -> (s -> b -> t) -> Lens s t a b
-lens sa sbt afb s = sbt s <$> afb (sa s)
-{-# INLINE lens #-}
 
 -- Internal id functor.
 newtype Id a = Id { runId :: a }
@@ -20,24 +13,7 @@ newtype Id a = Id { runId :: a }
 -- | Could use @DeriveFunctor@ here but that's not portable.
 instance Functor Id where fmap f = Id . f . runId
 
--- | Get the @a@ inside the @s@.
-view :: Getter s a -> s -> a
-view l = getConst . l Const
-
--- | Modify the @a@ inside the @s@, optionally changing the types to
--- @b@ and @t@.
-over :: Lens s t a b -> (a -> b) -> s -> t
-over l f = runId . l (Id . f)
-
--- | Set the @a@ inside the @s@, optionally changing the types to @b@
--- and @t@.
-set :: Lens s t a b -> b -> s -> t
-set l a = runId . l (Id . const a)
-
-to :: (Profunctor p, Contravariant f) => (s -> a) -> p a (f a) -> p s (f s)
-to k = dimap k (contramap k)
-{-# INLINE to #-}
-
+{-
 class HasReplicaId s a | s -> a where
   replicaId :: Lens' s a
 
@@ -172,4 +148,4 @@ class HasTopicPublishes s a | s -> a where
 
 class HasPartitionResults s a | s -> a where
   partitionResults :: Lens' s a
-
+-}

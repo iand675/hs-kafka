@@ -1,56 +1,23 @@
-{-# LANGUAGE DataKinds             #-}
-{-# LANGUAGE DeriveGeneric         #-}
-{-# LANGUAGE FlexibleInstances     #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE TemplateHaskell       #-}
-{-# LANGUAGE TypeFamilies          #-}
+{-# LANGUAGE DataKinds              #-}
+{-# LANGUAGE DeriveGeneric          #-}
+{-# LANGUAGE FlexibleInstances      #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE MultiParamTypeClasses  #-}
+{-# LANGUAGE TemplateHaskell        #-}
+{-# LANGUAGE TypeFamilies           #-}
 module Network.Kafka.Primitive.Offset where
+import           Control.Lens
 import qualified Data.Vector as V
 import           Network.Kafka.Exports
 import           Network.Kafka.Types
-
-data instance RequestMessage Offset 0 = OffsetRequestV0
-  { offsetRequestV0ReplicaId       :: !NodeId
-  , offsetRequestV0TopicPartitions :: !(V.Vector TopicPartition)
-  } deriving (Eq, Show, Generic)
-
-instance Binary (RequestMessage Offset 0) where
-  get = OffsetRequestV0 <$> get <*> (fromArray <$> get)
-  put r = put (offsetRequestV0ReplicaId r) *>
-          put (Array $ offsetRequestV0TopicPartitions r)
-
-instance ByteSize (RequestMessage Offset 0) where
-  byteSize p = byteSize (offsetRequestV0ReplicaId p) +
-               byteSize (offsetRequestV0TopicPartitions p)
-
-
-data TopicPartition = TopicPartition
-  { topicPartitionTopic   :: !Utf8
-  , topicPartitionOffsets :: !(V.Vector PartitionOffsetRequestInfo)
-  } deriving (Eq, Show, Generic)
-
-instance Binary TopicPartition where
-  get = TopicPartition <$> get <*> (fromFixedArray <$> get)
-  put t = put (topicPartitionTopic t) *>
-          put (FixedArray $ topicPartitionOffsets t)
-
-instance HasTopic TopicPartition Utf8 where
-  topic = lens topicPartitionTopic (\s a -> s { topicPartitionTopic = a })
-  {-# INLINEABLE topic #-}
-
-instance ByteSize TopicPartition where
-  byteSize p = byteSize (topicPartitionTopic p) +
-               byteSize (FixedArray $ topicPartitionOffsets p)
-
-instance HasOffsets TopicPartition (V.Vector PartitionOffsetRequestInfo) where
-  offsets = lens topicPartitionOffsets (\s a -> s { topicPartitionOffsets = a })
-  {-# INLINEABLE offsets #-}
 
 data PartitionOffsetRequestInfo = PartitionOffsetRequestInfo
   { partitionOffsetRequestInfoPartition          :: !PartitionId
   , partitionOffsetRequestInfoTime               :: !Int64 -- ^ milliseconds
   , partitionOffsetRequestInfoMaxNumberOfOffsets :: !Int32
   } deriving (Eq, Show, Generic)
+
+makeFields ''PartitionOffsetRequestInfo
 
 instance Binary PartitionOffsetRequestInfo where
   get = PartitionOffsetRequestInfo <$> get <*> get <*> get
@@ -63,17 +30,45 @@ instance ByteSize PartitionOffsetRequestInfo where
                byteSize (partitionOffsetRequestInfoTime p) +
                byteSize (partitionOffsetRequestInfoMaxNumberOfOffsets p)
 
-instance HasPartition PartitionOffsetRequestInfo PartitionId where
-  partition = lens partitionOffsetRequestInfoPartition (\s a -> s { partitionOffsetRequestInfoPartition = a })
-  {-# INLINEABLE partition #-}
 
-instance HasTime PartitionOffsetRequestInfo Int64 where
-  time = lens partitionOffsetRequestInfoTime (\s a -> s { partitionOffsetRequestInfoTime = a })
-  {-# INLINEABLE time #-}
+data TopicPartition = TopicPartition
+  { topicPartitionTopic   :: !Utf8
+  , topicPartitionOffsets :: !(V.Vector PartitionOffsetRequestInfo)
+  } deriving (Eq, Show, Generic)
 
-instance HasMaxNumberOfOffsets PartitionOffsetRequestInfo Int32 where
-  maxNumberOfOffsets = lens partitionOffsetRequestInfoMaxNumberOfOffsets (\s a -> s { partitionOffsetRequestInfoMaxNumberOfOffsets = a })
-  {-# INLINEABLE maxNumberOfOffsets #-}
+makeFields ''TopicPartition
+
+instance Binary TopicPartition where
+  get = TopicPartition <$> get <*> (fromFixedArray <$> get)
+  put t = put (topicPartitionTopic t) *>
+          put (FixedArray $ topicPartitionOffsets t)
+
+instance ByteSize TopicPartition where
+  byteSize p = byteSize (topicPartitionTopic p) +
+               byteSize (FixedArray $ topicPartitionOffsets p)
+
+
+data OffsetRequestV0 = OffsetRequestV0
+  { offsetRequestV0ReplicaId       :: !NodeId
+  , offsetRequestV0TopicPartitions :: !(V.Vector TopicPartition)
+  } deriving (Eq, Show, Generic)
+
+instance RequestApiKey OffsetRequestV0 where
+  apiKey = theApiKey 2
+
+instance RequestApiVersion OffsetRequestV0 where
+  apiVersion = const 0
+
+makeFields ''OffsetRequestV0
+
+instance Binary OffsetRequestV0 where
+  get = OffsetRequestV0 <$> get <*> (fromArray <$> get)
+  put r = put (offsetRequestV0ReplicaId r) *>
+          put (Array $ offsetRequestV0TopicPartitions r)
+
+instance ByteSize OffsetRequestV0 where
+  byteSize p = byteSize (offsetRequestV0ReplicaId p) +
+               byteSize (offsetRequestV0TopicPartitions p)
 
 
 data PartitionOffset = PartitionOffset
@@ -81,6 +76,8 @@ data PartitionOffset = PartitionOffset
   , partitionOffsetErrorCode :: !ErrorCode
   , partitionOffsetOffset    :: !Int64
   } deriving (Eq, Show, Generic)
+
+makeFields ''PartitionOffset
 
 instance Binary PartitionOffset where
   get = PartitionOffset <$> get <*> get <*> get
@@ -93,38 +90,12 @@ instance ByteSize PartitionOffset where
                byteSize (partitionOffsetErrorCode p) +
                byteSize (partitionOffsetOffset p)
 
-instance HasPartition PartitionOffset Int32 where
-  partition = lens partitionOffsetPartition (\s a -> s { partitionOffsetPartition = a })
-  {-# INLINEABLE partition #-}
-
-instance HasErrorCode PartitionOffset ErrorCode where
-  errorCode = lens partitionOffsetErrorCode (\s a -> s { partitionOffsetErrorCode = a })
-  {-# INLINEABLE errorCode #-}
-
-instance HasOffset PartitionOffset Int64 where
-  offset = lens partitionOffsetOffset (\s a -> s { partitionOffsetOffset = a })
-  {-# INLINEABLE offset #-}
-
-data instance ResponseMessage Offset 0 = OffsetResponseV0
-  { offsetResponseV0Offsets :: !(V.Vector PartitionOffsetResponseInfo)
-  } deriving (Eq, Show, Generic)
-
-instance Binary (ResponseMessage Offset 0) where
-  get = OffsetResponseV0 <$> (fromArray <$> get)
-  put r = put (Array $ offsetResponseV0Offsets r)
-
-instance ByteSize (ResponseMessage Offset 0) where
-  byteSize = byteSize . FixedArray . offsetResponseV0Offsets
-
-instance HasOffsets (ResponseMessage Offset 0) (V.Vector PartitionOffsetResponseInfo) where
-  offsets = lens offsetResponseV0Offsets (\s a -> s { offsetResponseV0Offsets = a })
-  {-# INLINEABLE offsets #-}
-
-
 data PartitionOffsetResponseInfo = PartitionOffsetResponseInfo
   { partitionOffsetResponseInfoTopic   :: !Utf8
   , partitionOffsetResponseInfoOffsets :: !(V.Vector PartitionOffset)
   } deriving (Eq, Show, Generic)
+
+makeFields ''PartitionOffsetResponseInfo
 
 instance Binary PartitionOffsetResponseInfo where
   get = PartitionOffsetResponseInfo <$> get <*> (fromFixedArray <$> get)
@@ -135,10 +106,18 @@ instance ByteSize PartitionOffsetResponseInfo where
   byteSize p = byteSize (partitionOffsetResponseInfoTopic p) +
                byteSize (partitionOffsetResponseInfoOffsets p)
 
-instance HasTopic PartitionOffsetResponseInfo Utf8 where
-  topic = lens partitionOffsetResponseInfoTopic (\s a -> s { partitionOffsetResponseInfoTopic = a })
-  {-# INLINEABLE topic #-}
 
-instance HasOffsets PartitionOffsetResponseInfo (V.Vector PartitionOffset) where
-  offsets = lens partitionOffsetResponseInfoOffsets (\s a -> s { partitionOffsetResponseInfoOffsets = a })
-  {-# INLINEABLE offsets #-}
+data OffsetResponseV0 = OffsetResponseV0
+  { offsetResponseV0Offsets :: !(V.Vector PartitionOffsetResponseInfo)
+  } deriving (Eq, Show, Generic)
+
+makeFields ''OffsetResponseV0
+
+instance Binary OffsetResponseV0 where
+  get = OffsetResponseV0 <$> (fromArray <$> get)
+  put r = put (Array $ offsetResponseV0Offsets r)
+
+instance ByteSize OffsetResponseV0 where
+  byteSize = byteSize . FixedArray . offsetResponseV0Offsets
+
+

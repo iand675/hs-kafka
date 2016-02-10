@@ -26,14 +26,10 @@ import qualified Data.IntMap.Strict as I
 import           Data.IORef
 import qualified Data.Vector as V
 import qualified Data.Vector.Generic as G
-import           Debug.Trace
 import           GHC.Generics hiding (to)
 import           GHC.TypeLits
 import           Network.Simple.TCP (HostName, ServiceName, Socket)
 import           Network.Kafka.Exports
-import           Network.Kafka.Fields
-
-import           Debug.Trace
 
 newtype CorrelationId = CorrelationId { fromCorrelationId :: Int32 }
   deriving (Show, Eq, Ord, Binary, ByteSize)
@@ -58,6 +54,15 @@ data Acks
   = All
   | LeaderOnly
   | NoAck
+
+instance Enum Acks where
+  toEnum (-1) = All
+  toEnum 0 = NoAck
+  toEnum 1 = LeaderOnly
+
+  fromEnum All = -1
+  fromEnum NoAck = 0
+  fromEnum LeaderOnly = 1
 
 data ResetPolicy
   = Earliest
@@ -95,6 +100,7 @@ data KafkaConfig = KafkaConfig
   , kafkaConfigEnableAutoCommit                 :: !Bool
   , kafkaConfigAutoCommitInterval               :: !Int
   , kafkaConfigCheckCrcs                        :: !Bool
+  , kafkaConfigTimeoutMs                        :: !Int
   }
 
 makeFields ''KafkaConfig
@@ -130,6 +136,7 @@ defaultConfig = KafkaConfig
   , kafkaConfigEnableAutoCommit                 = True
   , kafkaConfigAutoCommitInterval               = 5000
   , kafkaConfigCheckCrcs                        = True
+  , kafkaConfigTimeoutMs                        = 30000 
   }
 
 putL :: Binary a => Getter s a -> s -> Put
@@ -206,7 +213,7 @@ instance (RequestApiVersion req,
           RequestApiKey req,
           ByteSize req,
           Binary req) => Binary (Request req) where
-  get = label "request message" $ do
+  get = do
     _ <- get :: Get ApiKey
     _ <- get :: Get ApiVersion
     Request <$> get <*> get <*> get
@@ -428,8 +435,7 @@ instance Binary Attributes where
 
 data Message = Message
   -- messageCrc would go here
-  { messageMagicByte  :: !Int8
-  , messageAttributes :: !Attributes
+  { messageAttributes :: !Attributes
   , messageKey        :: !Bytes
   , messageValue      :: !Bytes
   } deriving (Show, Eq, Generic)
@@ -437,19 +443,19 @@ data Message = Message
 makeFields ''Message
 
 instance ByteSize Message where
-  byteSize m = 4 + -- crc
-               byteSizeL magicByte m +
-               byteSizeL attributes m +
+  byteSize m = 5 + -- crc, magic byte
+               byteSize (messageAttributes m) +
                byteSize (messageKey m) +
                byteSize (messageValue m)
   {-# INLINE byteSize #-}
 
 instance Binary Message where
-  get = label "message" $ do
+  get = do
     crc <- get :: Get Word32
     bsStart <- bytesRead
-    (msg, bsEnd) <- label "message body crc section" $ lookAhead $ do
-      msg <- Message <$> get <*> get <*> get <*> get
+    (msg, bsEnd) <- lookAhead $ do
+      get :: Get Int8
+      msg <- Message <$> get <*> get <*> get
       bsEnd <- bytesRead
       return (msg, bsEnd)
     crcChunk <- getByteString $ fromIntegral (bsEnd - bsStart)
@@ -459,7 +465,7 @@ instance Binary Message where
       else return msg
   put p = do
     let rest = runPut $ do
-          putL magicByte p
+          put (0 :: Int8)
           putL attributes p
           put $ messageKey p
           put $ messageValue p
@@ -476,10 +482,10 @@ data MessageSetItem = MessageSetItem
 makeFields ''MessageSetItem
 
 instance Binary MessageSetItem where
-  get = label "message set item" $ do
-    o <- label "offset" $ get
-    s <- label "message size" $ (get :: Get Int32)
-    m <- label "message" $ isolate (fromIntegral s) get
+  get = do
+    o <- get
+    s <- get :: Get Int32
+    m <- isolate (fromIntegral s) get
     return $ MessageSetItem o m
   {-# INLINE get #-}
 
@@ -490,9 +496,9 @@ instance Binary MessageSetItem where
   {-# INLINE put #-}
 
 instance ByteSize MessageSetItem where
-  byteSize m = byteSizeL offset m +
+  byteSize m = byteSize (messageSetItemOffset m) +
                4 + -- MessageSize
-               byteSizeL message m
+               byteSize (messageSetItemMessage m)
   {-# INLINE byteSize #-}
 
 newtype MessageSet = MessageSet
@@ -505,7 +511,7 @@ instance ByteSize MessageSet where
   byteSize = sum . map byteSize . messageSetMessages
 
 getMessageSet :: Int32 -> Get MessageSet
-getMessageSet c = label ("message set " ++ show c) $ fmap (MessageSet . reverse) $ isolate (fromIntegral c) $ go []
+getMessageSet c = fmap (MessageSet . reverse) $ isolate (fromIntegral c) $ go []
   where
     go xs = do
       pred <- isEmpty
@@ -516,7 +522,7 @@ getMessageSet c = label ("message set " ++ show c) $ fmap (MessageSet . reverse)
           case mx of
             Nothing -> do
               consumed <- bytesRead
-              let rem = traceShowId (c - fromIntegral consumed)
+              let rem = c - fromIntegral consumed
               void $ getByteString $ fromIntegral rem
               return xs
             Just x -> go (x:xs)
@@ -539,7 +545,7 @@ data Response resp = Response
 makeFields ''Response
 
 instance (ByteSize resp, Binary resp) => Binary (Response resp) where
-  get = label "response message" (Response <$> get <*> get)
+  get = Response <$> get <*> get
   put p = do
     put $ responseCorrelationId p
     put $ responseMessage p

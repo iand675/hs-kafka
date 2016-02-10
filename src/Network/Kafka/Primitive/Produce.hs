@@ -17,7 +17,6 @@ data PartitionMessages = PartitionMessages
   , partitionMessagesMessageSet :: !MessageSet
   } deriving (Show, Eq)
 
-makeFields ''PartitionMessages
 
 instance Binary PartitionMessages where
   get = do
@@ -26,14 +25,14 @@ instance Binary PartitionMessages where
     msgs <- getMessageSet len
     return $ PartitionMessages pid msgs
   put p = do
-    putL partition p
-    putL (messageSet . to byteSize) p
-    putMessageSet $ view messageSet p
+    put $ partitionMessagesPartition p
+    put $ byteSize $ partitionMessagesMessageSet p
+    putMessageSet $ partitionMessagesMessageSet p
 
 instance ByteSize PartitionMessages where
-  byteSize p = byteSizeL partition p +
+  byteSize p = byteSize (partitionMessagesPartition p) +
                4 +
-               byteSizeL messageSet p
+               byteSize (partitionMessagesMessageSet p)
 
 
 data TopicPublish = TopicPublish
@@ -41,17 +40,16 @@ data TopicPublish = TopicPublish
   , topicPublishPartitions :: !(V.Vector PartitionMessages)
   } deriving (Show, Eq)
 
-makeFields ''TopicPublish
 
 instance Binary TopicPublish where
   get = TopicPublish <$> get <*> (fromArray <$> get)
   put t = do
-    putL topic t
-    putL (partitions . to Array) t
+    put $ topicPublishTopic t
+    put $ Array $ topicPublishPartitions t
 
 instance ByteSize TopicPublish where
-  byteSize t = byteSizeL topic t +
-               byteSizeL partitions t
+  byteSize t = byteSize (topicPublishTopic t) +
+               byteSize (topicPublishPartitions t)
 
 
 data ProduceRequestV0 = ProduceRequestV0
@@ -60,19 +58,18 @@ data ProduceRequestV0 = ProduceRequestV0
   , produceRequestV0TopicPublishes :: !(V.Vector TopicPublish)
   } deriving (Show, Eq, Generic)
 
-makeFields ''ProduceRequestV0
 
 instance Binary ProduceRequestV0 where
   get = ProduceRequestV0 <$> get <*> get <*> (fromArray <$> get)
   put r = do
-    putL requiredAcks r
-    putL timeout r
-    putL (topicPublishes . to Array) r
+    put $ produceRequestV0RequiredAcks r
+    put $ produceRequestV0Timeout r
+    put $ Array $ produceRequestV0TopicPublishes r
 
 instance ByteSize ProduceRequestV0 where
-  byteSize r = byteSizeL requiredAcks r +
-               byteSizeL timeout r +
-               byteSizeL topicPublishes r
+  byteSize r = byteSize (produceRequestV0RequiredAcks r) +
+               byteSize (produceRequestV0Timeout r) +
+               byteSize (produceRequestV0TopicPublishes r)
 
 data PublishPartitionResult = PublishPartitionResult
   { publishPartitionResultPartition :: !PartitionId
@@ -80,13 +77,12 @@ data PublishPartitionResult = PublishPartitionResult
   , publishPartitionResultOffset    :: !Int64
   } deriving (Show, Eq, Generic)
 
-makeFields ''PublishPartitionResult
 
 instance Binary PublishPartitionResult
 instance ByteSize PublishPartitionResult where
-  byteSize p = byteSizeL partition p +
-               byteSizeL errorCode p +
-               byteSizeL offset p
+  byteSize p = byteSize (publishPartitionResultPartition p) +
+               byteSize (publishPartitionResultErrorCode p) +
+               byteSize (publishPartitionResultOffset p)
 
 
 data PublishResult = PublishResult
@@ -94,31 +90,29 @@ data PublishResult = PublishResult
   , publishResultPartitionResults :: !(V.Vector PublishPartitionResult)
   } deriving (Show, Eq, Generic)
 
-makeFields ''PublishResult
 
 instance Binary PublishResult where
   get = PublishResult <$> get <*> (fromArray <$> get)
   put p = do
-    putL topic p
-    putL (partitionResults . to Array) p
+    put $ publishResultTopic p
+    put $ Array $ publishResultPartitionResults p
 
 instance ByteSize PublishResult where
-  byteSize p = byteSizeL topic p +
-               byteSizeL partitionResults p
+  byteSize p = byteSize (publishResultTopic p) +
+               byteSize (publishResultPartitionResults p)
 
 
-data ProduceResponseV0 = ProduceResponseV0
-  { produceResponseV0Results :: !(V.Vector PublishResult)
+newtype ProduceResponseV0 = ProduceResponseV0
+  { produceResponseV0Results :: V.Vector PublishResult
   } deriving (Show, Eq, Generic)
 
-makeFields ''ProduceResponseV0
 
 instance Binary ProduceResponseV0 where
   get = (ProduceResponseV0 . fromArray) <$> get
-  put r = putL (results . to Array) r
+  put = put . Array . produceResponseV0Results
 
 instance ByteSize ProduceResponseV0 where
-  byteSize = byteSizeL results
+  byteSize = byteSize . produceResponseV0Results
 
 instance RequestApiKey ProduceRequestV0 where
   apiKey = theApiKey 0

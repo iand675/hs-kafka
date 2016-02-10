@@ -3,24 +3,20 @@
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeFamilies          #-}
-{-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE TemplateHaskell        #-}
 module Network.Kafka.Primitive.GroupCoordinator where
 import qualified Data.Vector as V
 import           Control.Lens
 import           Network.Kafka.Exports
 import           Network.Kafka.Types
 
-data GroupCoordinatorRequestV0 = GroupCoordinatorRequestV0
-  { groupCoordinatorRequestV0ConsumerGroup :: !Utf8
+newtype GroupCoordinatorRequestV0 = GroupCoordinatorRequestV0
+  { groupCoordinatorRequestV0ConsumerGroup :: Utf8
   } deriving (Show, Eq, Generic)
-
-makeFields ''GroupCoordinatorRequestV0
 
 instance Binary GroupCoordinatorRequestV0
 
 instance ByteSize GroupCoordinatorRequestV0 where
-  byteSize = byteSizeL consumerGroup
+  byteSize = byteSize . groupCoordinatorRequestV0ConsumerGroup
 
 data GroupCoordinatorResponseV0 = GroupCoordinatorResponseV0
   { groupCoordinatorResponseV0ErrorCode       :: !ErrorCode
@@ -29,7 +25,6 @@ data GroupCoordinatorResponseV0 = GroupCoordinatorResponseV0
   , groupCoordinatorResponseV0CoordinatorPort :: !Int32
   } deriving (Show, Eq, Generic)
 
-makeFields ''GroupCoordinatorResponseV0
 
 instance Binary GroupCoordinatorResponseV0
 
@@ -44,3 +39,4 @@ instance RequestApiKey GroupCoordinatorRequestV0 where
 
 instance RequestApiVersion GroupCoordinatorRequestV0 where
   apiVersion = const 0
+

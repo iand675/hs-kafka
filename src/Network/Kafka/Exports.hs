@@ -3,9 +3,7 @@ module Network.Kafka.Exports
 ( module Data.Binary
 , module Data.Int
 , module GHC.TypeLits
-, module Network.Kafka.Fields
 , ByteSize(..)
-, byteSizeL
 , Generic
 ) where
 import Control.Lens
@@ -13,7 +11,6 @@ import Data.Int
 import GHC.Generics hiding (to)
 import GHC.TypeLits
 import Data.Binary
-import Network.Kafka.Fields
 
 -- | Note that for requests and responses, only NON-COMMON FIELDS should be counted in the instance
 class ByteSize a where
@@ -30,8 +27,4 @@ instance ByteSize Int32 where
 
 instance ByteSize Int64 where
   byteSize = const 8
-
-byteSizeL :: ByteSize a => Getter s a -> s -> Int32
-byteSizeL g = view (g . to byteSize)
-{-# INLINE byteSizeL #-}
 

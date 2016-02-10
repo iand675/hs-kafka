@@ -18,19 +18,18 @@ data CommitPartitionV0 = CommitPartitionV0
   , commitPartitionV0Metadata  :: !Utf8
   } deriving (Eq, Show, Generic)
 
-makeFields ''CommitPartitionV0
 
 instance Binary CommitPartitionV0 where
   get = CommitPartitionV0 <$> get <*> get <*> get
   put c = do
-    putL partition c
-    putL offset c
-    putL metadata c
+    put $ commitPartitionV0Partition c
+    put $ commitPartitionV0Offset c
+    put $ commitPartitionV0Metadata c
 
 instance ByteSize CommitPartitionV0 where
-  byteSize c = byteSizeL partition c +
-               byteSizeL offset c +
-               byteSizeL metadata c
+  byteSize c = byteSize (commitPartitionV0Partition c) +
+               byteSize (commitPartitionV0Offset c) +
+               byteSize (commitPartitionV0Metadata c)
 
 data CommitV0 = CommitV0
   { commitV0Topic      :: !Utf8
@@ -38,34 +37,31 @@ data CommitV0 = CommitV0
   } deriving (Eq, Show, Generic)
 
 
-makeFields ''CommitV0
-
 instance Binary CommitV0 where
   get = CommitV0 <$> get <*> (fromArray <$> get)
   put c = do
-    putL topic c
-    putL (partitions . to Array) c
+    put $ commitV0Topic c
+    put $ Array $ commitV0Partitions c
 
 instance ByteSize CommitV0 where
-  byteSize c = byteSizeL topic c +
-               byteSizeL partitions c
+  byteSize c = byteSize (commitV0Topic c) +
+               byteSize (commitV0Partitions c)
 
 data OffsetCommitRequestV0 = OffsetCommitRequestV0
   { offsetCommitRequestV0ConsumerGroup :: !Utf8
   , offsetCommitRequestV0Commits       :: !(V.Vector CommitV0)
   } deriving (Eq, Show, Generic)
 
-makeFields ''OffsetCommitRequestV0
 
 instance Binary OffsetCommitRequestV0 where
   get = OffsetCommitRequestV0 <$> get <*> (fromArray <$> get)
   put r = do
-    putL consumerGroup r
-    putL (commits . to Array) r
+    put $ offsetCommitRequestV0ConsumerGroup r
+    put $ Array $ offsetCommitRequestV0Commits r
 
 instance ByteSize OffsetCommitRequestV0 where
-  byteSize r = byteSizeL consumerGroup r +
-               byteSizeL commits r
+  byteSize r = byteSize (offsetCommitRequestV0ConsumerGroup r) +
+               byteSize (offsetCommitRequestV0Commits r)
 
 
 data CommitPartitionV1 = CommitPartitionV1
@@ -75,38 +71,35 @@ data CommitPartitionV1 = CommitPartitionV1
   , commitPartitionV1Metadata  :: !Utf8
   } deriving (Eq, Show, Generic)
 
-makeFields ''CommitPartitionV1
 
 instance Binary CommitPartitionV1 where
   get = CommitPartitionV1 <$> get <*> get <*> get <*> get
   put c = do
-    putL partition c
-    putL offset c
-    putL timestamp c
-    putL metadata c
+    put $ commitPartitionV1Partition c
+    put $ commitPartitionV1Offset c
+    put $ commitPartitionV1Timestamp c
+    put $ commitPartitionV1Metadata c
 
 instance ByteSize CommitPartitionV1 where
-  byteSize c = byteSizeL partition c +
-               byteSizeL offset c +
-               byteSizeL timestamp c +
-               byteSizeL metadata c
+  byteSize c = byteSize (commitPartitionV1Partition c) +
+               byteSize (commitPartitionV1Offset c) +
+               byteSize (commitPartitionV1Timestamp c) +
+               byteSize (commitPartitionV1Metadata c)
 
 data CommitV1 = CommitV1
   { commitV1Topic      :: !Utf8
   , commitV1Partitions :: !(V.Vector CommitPartitionV1)
   } deriving (Eq, Show, Generic)
 
-makeFields ''CommitV1
-
 instance Binary CommitV1 where
   get = CommitV1 <$> get <*> (fromArray <$> get)
   put c = do
-    putL topic c
-    putL (partitions . to Array) c
+    put $ commitV1Topic c
+    put $ Array $ commitV1Partitions c
 
 instance ByteSize CommitV1 where
-  byteSize c = byteSizeL topic c +
-               byteSizeL partitions c
+  byteSize c = byteSize (commitV1Topic c) +
+               byteSize (commitV1Partitions c)
 
 data OffsetCommitRequestV1 = OffsetCommitRequestV1
   { offsetCommitRequestV1ConsumerGroup :: !Utf8
@@ -115,21 +108,20 @@ data OffsetCommitRequestV1 = OffsetCommitRequestV1
   , offsetCommitRequestV1Commits       :: !(V.Vector CommitV1)
   } deriving (Eq, Show, Generic)
 
-makeFields ''OffsetCommitRequestV1
 
 instance Binary OffsetCommitRequestV1 where
   get = OffsetCommitRequestV1 <$> get <*> get <*> get <*> (fromArray <$> get)
   put r = do
-    putL consumerGroup r
-    putL generation r
-    putL consumer r
-    putL (commits . to Array) r
+    put $ offsetCommitRequestV1ConsumerGroup r
+    put $ offsetCommitRequestV1Generation r
+    put $ offsetCommitRequestV1Consumer r
+    put $ Array $ offsetCommitRequestV1Commits r
 
 instance ByteSize OffsetCommitRequestV1 where
-  byteSize r = byteSizeL consumerGroup r +
-               byteSizeL generation r +
-               byteSizeL consumer r +
-               byteSizeL commits r
+  byteSize r = byteSize (offsetCommitRequestV1ConsumerGroup r) +
+               byteSize (offsetCommitRequestV1Generation r) +
+               byteSize (offsetCommitRequestV1Consumer r) +
+               byteSize (offsetCommitRequestV1Commits r)
 
 data CommitPartitionV2 = CommitPartitionV2
   { commitPartitionV2Partition :: !PartitionId
@@ -137,35 +129,33 @@ data CommitPartitionV2 = CommitPartitionV2
   , commitPartitionV2Metadata  :: !Utf8
   } deriving (Eq, Show, Generic)
 
-makeFields ''CommitPartitionV2
 
 instance Binary CommitPartitionV2 where
   get = CommitPartitionV2 <$> get <*> get <*> get
   put c = do
-    putL partition c
-    putL offset c
-    putL metadata c
+    put $ commitPartitionV2Partition c
+    put $ commitPartitionV2Offset c
+    put $ commitPartitionV2Metadata c
 
 instance ByteSize CommitPartitionV2 where
-  byteSize c = byteSizeL partition c +
-               byteSizeL offset c +
-               byteSizeL metadata c
+  byteSize c = byteSize (commitPartitionV2Partition c) +
+               byteSize (commitPartitionV2Offset c) +
+               byteSize (commitPartitionV2Metadata c)
+
 data CommitV2 = CommitV2
   { commitV2Topic      :: !Utf8
   , commitV2Partitions :: !(V.Vector CommitPartitionV2)
   } deriving (Eq, Show, Generic)
 
-makeFields ''CommitV2
-
 instance Binary CommitV2 where
   get = CommitV2 <$> get <*> (fromArray <$> get)
   put c = do
-    putL topic c
-    putL (partitions . to Array) c
+    put $ commitV2Topic c
+    put $ Array $ commitV2Partitions c
 
 instance ByteSize CommitV2 where
-  byteSize c = byteSizeL topic c +
-               byteSizeL partitions c
+  byteSize c = byteSize (commitV2Topic c) +
+               byteSize (commitV2Partitions c)
 
 data OffsetCommitRequestV2 = OffsetCommitRequestV2
   { offsetCommitRequestV2ConsumerGroup :: !Utf8
@@ -175,41 +165,38 @@ data OffsetCommitRequestV2 = OffsetCommitRequestV2
   , offsetCommitRequestV2Commits       :: !(V.Vector CommitV2)
   } deriving (Eq, Show, Generic)
 
-makeFields ''OffsetCommitRequestV2
 
 instance Binary OffsetCommitRequestV2 where
   get = OffsetCommitRequestV2 <$> get <*> get <*> get <*> get <*> (fromArray <$> get)
   put r = do
-    putL consumerGroup r
-    putL generation r
-    putL consumer r
-    putL retentionTime r
-    putL (commits . to Array) r
+    put $ offsetCommitRequestV2ConsumerGroup r
+    put $ offsetCommitRequestV2Generation r
+    put $ offsetCommitRequestV2Consumer r
+    put $ offsetCommitRequestV2RetentionTime r
+    put $ Array $ offsetCommitRequestV2Commits r
 
 instance ByteSize OffsetCommitRequestV2 where
-  byteSize r = byteSizeL consumerGroup r +
-               byteSizeL generation r +
-               byteSizeL consumer r +
-               byteSizeL retentionTime r +
-               byteSizeL commits r
+  byteSize r = byteSize (offsetCommitRequestV2ConsumerGroup r) +
+               byteSize (offsetCommitRequestV2Generation r) +
+               byteSize (offsetCommitRequestV2Consumer r) +
+               byteSize (offsetCommitRequestV2RetentionTime r) +
+               byteSize (offsetCommitRequestV2Commits r)
 
 data CommitPartitionResult = CommitPartitionResult
   { commitPartitionResultPartition :: !PartitionId
   , commitPartitionResultErrorCode :: !ErrorCode
   } deriving (Eq, Show, Generic)
 
-makeFields ''CommitPartitionResult
 
 instance Binary CommitPartitionResult where
   get = CommitPartitionResult <$> get <*> get
   put c = do
-    putL partition c
-    putL errorCode c
+    put $ commitPartitionResultPartition c
+    put $ commitPartitionResultErrorCode c
 
 instance ByteSize CommitPartitionResult where
-  byteSize c = byteSizeL partition c +
-               byteSizeL errorCode c
-
+  byteSize c = byteSize (commitPartitionResultPartition c) +
+               byteSize (commitPartitionResultErrorCode c)
 
 
 data CommitTopicResult = CommitTopicResult
@@ -217,58 +204,54 @@ data CommitTopicResult = CommitTopicResult
   , commitTopicResultResults :: !(V.Vector CommitPartitionResult)
   } deriving (Eq, Show, Generic)
 
-makeFields ''CommitTopicResult
 
 instance Binary CommitTopicResult where
   get = CommitTopicResult <$> get <*> (fromFixedArray <$> get)
   put c = do
-    putL topic c
-    putL (results . to FixedArray) c
+    put $ commitTopicResultTopic c
+    put $ FixedArray $ commitTopicResultResults c
 
 instance ByteSize CommitTopicResult where
-  byteSize c = byteSizeL topic c +
-               byteSizeL (results . to FixedArray) c
+  byteSize c = byteSize (commitTopicResultTopic c) +
+               byteSize (FixedArray $ commitTopicResultResults c)
 
-data OffsetCommitResponseV0 = OffsetCommitResponseV0
-  { offsetCommitResponseV0Results :: !(V.Vector CommitTopicResult)
+newtype OffsetCommitResponseV0 = OffsetCommitResponseV0
+  { offsetCommitResponseV0Results :: V.Vector CommitTopicResult
   } deriving (Eq, Show, Generic)
 
-makeFields ''OffsetCommitResponseV0
 
 instance Binary OffsetCommitResponseV0 where
   get = (OffsetCommitResponseV0 . fromArray) <$> get
-  put = putL (results . to Array)
+  put = put . Array . offsetCommitResponseV0Results
 
 instance ByteSize OffsetCommitResponseV0 where
-  byteSize = byteSizeL results
+  byteSize = byteSize . offsetCommitResponseV0Results
 
 
-data OffsetCommitResponseV1 = OffsetCommitResponseV1
-  { offsetCommitResponseV1Results :: !(V.Vector CommitTopicResult)
+newtype OffsetCommitResponseV1 = OffsetCommitResponseV1
+  { offsetCommitResponseV1Results :: V.Vector CommitTopicResult
   } deriving (Eq, Show, Generic)
 
-makeFields ''OffsetCommitResponseV1
 
 instance Binary OffsetCommitResponseV1 where
   get = (OffsetCommitResponseV1 . fromArray) <$> get
-  put = putL (results . to Array)
+  put = put . Array . offsetCommitResponseV1Results
 
 instance ByteSize OffsetCommitResponseV1 where
-  byteSize = byteSizeL results
+  byteSize = byteSize . offsetCommitResponseV1Results
 
 
-data OffsetCommitResponseV2 = OffsetCommitResponseV2
-  { offsetCommitResponseV2Results :: !(V.Vector CommitTopicResult)
+newtype OffsetCommitResponseV2 = OffsetCommitResponseV2
+  { offsetCommitResponseV2Results :: V.Vector CommitTopicResult
   } deriving (Eq, Show, Generic)
 
-makeFields ''OffsetCommitResponseV2
 
 instance Binary OffsetCommitResponseV2 where
   get = (OffsetCommitResponseV2 . fromArray) <$> get
-  put = putL (results . to Array)
+  put = put . Array . offsetCommitResponseV2Results
 
 instance ByteSize OffsetCommitResponseV2 where
-  byteSize = byteSizeL results
+  byteSize = byteSize . offsetCommitResponseV2Results
 
 instance RequestApiKey OffsetCommitRequestV0 where
   apiKey = theApiKey 8

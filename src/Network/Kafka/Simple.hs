@@ -2,6 +2,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 module Network.Kafka.Simple where
+import Control.Lens
 import Control.Monad.Trans
 import Control.Monad.Trans.State
 import Data.Int
@@ -37,15 +38,15 @@ fetch :: V.Vector TopicFetch -> Kafka (V.Vector FetchResult)
 fetch fs = do
   c <- kafkaContextConfig <$> Kafka get
   fetchResponseV0_Data <$> internal (FetchRequestV0 (NodeId (-1)) -- -1 is a specific value for non-brokers
-                                                    (fromIntegral $ kafkaConfigFetchMaxWaitTime c)
-                                                    (fromIntegral $ kafkaConfigFetchMinBytes c)
+                                                    (fromIntegral $ c ^. fetchMaxWaitTime)
+                                                    (fromIntegral $ c ^. fetchMinBytes)
                                                     fs)
 
 metadata :: V.Vector T.Text -> Kafka MetadataResponseV0
 metadata = internal . MetadataRequestV0 . V.map (Utf8 . T.encodeUtf8)
 
-offset :: OffsetRequestV0 -> Kafka (V.Vector PartitionOffsetResponseInfo)
-offset = fmap offsetResponseV0Offsets . internal
+offset :: NodeId -> V.Vector TopicPartition -> Kafka (V.Vector PartitionOffsetResponseInfo)
+offset n ps = offsetResponseV0Offsets <$> internal (OffsetRequestV0 n ps)
 
 offsetCommit :: OffsetCommitRequestV2 -> Kafka (V.Vector CommitTopicResult)
 offsetCommit = fmap offsetCommitResponseV2Results . internal
@@ -53,6 +54,13 @@ offsetCommit = fmap offsetCommitResponseV2Results . internal
 offsetFetch :: OffsetFetchRequestV1 -> Kafka (V.Vector TopicOffsetResponse)
 offsetFetch = fmap offsetFetchResponseV1Topics . internal
 
-produce :: ProduceRequestV0 -> Kafka (V.Vector PublishResult)
-produce = fmap produceResponseV0Results . internal
+produce :: V.Vector TopicPublish -> Kafka (V.Vector PublishResult)
+produce ts = do
+  c <- kafkaContextConfig <$> Kafka get
+  let req = ProduceRequestV0
+              { produceRequestV0RequiredAcks = fromIntegral $ fromEnum $ c ^. acks
+              , produceRequestV0Timeout = fromIntegral $ c ^. timeoutMs
+              , produceRequestV0TopicPublishes = ts
+              }
+  produceResponseV0Results <$> internal req
 

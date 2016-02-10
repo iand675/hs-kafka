@@ -20,38 +20,36 @@ data PartitionOffsetFetch = PartitionOffsetFetch
   , partitionOffsetFetchErrorCode :: !ErrorCode
   } deriving (Eq, Show, Generic)
 
-makeFields ''PartitionOffsetFetch
 
 instance Binary PartitionOffsetFetch where
   get = PartitionOffsetFetch <$> get <*> get <*> get <*> get
   put p = do
-    putL partition p
-    putL offset p
-    putL metadata p
-    putL errorCode p
+    put $ partitionOffsetFetchPartition p
+    put $ partitionOffsetFetchOffset p
+    put $ partitionOffsetFetchMetadata p
+    put $ partitionOffsetFetchErrorCode p
 
 instance ByteSize PartitionOffsetFetch where
-  byteSize p = byteSizeL partition p +
-               byteSizeL offset p +
-               byteSizeL metadata p +
-               byteSizeL errorCode p
+  byteSize p = byteSize (partitionOffsetFetchPartition p) +
+               byteSize (partitionOffsetFetchOffset p) +
+               byteSize (partitionOffsetFetchMetadata p) +
+               byteSize (partitionOffsetFetchErrorCode p)
 
 data TopicOffsetResponse = TopicOffsetResponse
   { topicOffsetResponseTopic      :: !Utf8 
   , topicOffsetResponsePartitions :: !(V.Vector PartitionOffsetFetch)
   } deriving (Eq, Show, Generic)
 
-makeFields ''TopicOffsetResponse
 
 instance Binary TopicOffsetResponse where
   get = TopicOffsetResponse <$> get <*> (fromArray <$> get)
   put r = do
-    putL topic r
-    putL (partitions . to Array) r
+    put $ topicOffsetResponseTopic r
+    put $ Array $ topicOffsetResponsePartitions r
 
 instance ByteSize TopicOffsetResponse where
-  byteSize r = byteSizeL topic r +
-               byteSizeL partitions r
+  byteSize r = byteSize (topicOffsetResponseTopic r) +
+               byteSize (topicOffsetResponsePartitions r)
 
 
 data TopicOffset = TopicOffset
@@ -59,45 +57,44 @@ data TopicOffset = TopicOffset
   , topicOffsetPartitions :: !(V.Vector PartitionId)
   } deriving (Show, Eq, Generic)
 
-makeFields ''TopicOffset
 
 instance Binary TopicOffset where
   get = TopicOffset <$> get <*> (fromFixedArray <$> get)
   put t = do
-    putL topic t
-    putL (partitions . to FixedArray) t
+    put $ topicOffsetTopic t
+    put $ FixedArray $ topicOffsetPartitions t
 
 instance ByteSize TopicOffset where
-  byteSize t = byteSizeL topic t + byteSizeL (partitions . to FixedArray) t
+  byteSize t = byteSize (topicOffsetTopic t) +
+               byteSize (FixedArray $ topicOffsetPartitions t)
 
 data OffsetFetchRequestV0 = OffsetFetchRequestV0
   { offsetFetchRequestV0ConsumerGroup :: !Utf8
   , offsetFetchRequestV0Topics        :: (V.Vector TopicOffset)
   } deriving (Show, Eq, Generic)
 
-makeFields ''OffsetFetchRequestV0
 
 instance Binary OffsetFetchRequestV0 where
   get = OffsetFetchRequestV0 <$> get <*> (fromArray <$> get)
   put o = do
-    putL consumerGroup o
-    putL (topics . to Array) o
+    put (offsetFetchRequestV0ConsumerGroup o)
+    put (Array $ offsetFetchRequestV0Topics o)
 
 instance ByteSize OffsetFetchRequestV0 where
-  byteSize r = byteSizeL consumerGroup r + byteSizeL topics r
+  byteSize r = byteSize (offsetFetchRequestV0ConsumerGroup r) +
+               byteSize (offsetFetchRequestV0Topics r)
 
-data OffsetFetchResponseV0 = OffsetFetchResponseV0
-  { offsetFetchResponseV0Topics :: !(V.Vector TopicOffsetResponse)
+newtype OffsetFetchResponseV0 = OffsetFetchResponseV0
+  { offsetFetchResponseV0Topics :: V.Vector TopicOffsetResponse
   } deriving (Show, Eq, Generic)
 
 instance Binary OffsetFetchResponseV0 where
   get = (OffsetFetchResponseV0 . fromArray) <$> get
-  put r = putL (topics . to Array) r
+  put = put . Array . offsetFetchResponseV0Topics
 
-makeFields ''OffsetFetchResponseV0
 
 instance ByteSize OffsetFetchResponseV0 where
-  byteSize r = byteSizeL topics r
+  byteSize = byteSize . offsetFetchResponseV0Topics
 
 
 data OffsetFetchRequestV1 = OffsetFetchRequestV1
@@ -105,27 +102,26 @@ data OffsetFetchRequestV1 = OffsetFetchRequestV1
   , offsetFetchRequestV1Topics        :: (V.Vector TopicOffset)
   } deriving (Show, Eq, Generic)
 
-makeFields ''OffsetFetchRequestV1
 
 instance Binary OffsetFetchRequestV1 where
   get = OffsetFetchRequestV1 <$> get <*> (fromArray <$> get)
   put (OffsetFetchRequestV1 g t) = put g >> put (Array t)
 
 instance ByteSize OffsetFetchRequestV1 where
-  byteSize r = byteSizeL consumerGroup r + byteSizeL topics r
+  byteSize r = byteSize (offsetFetchRequestV1ConsumerGroup r) +
+               byteSize (offsetFetchRequestV1Topics r)
 
-data OffsetFetchResponseV1 = OffsetFetchResponseV1
-  { offsetFetchResponseV1Topics :: !(V.Vector TopicOffsetResponse)
+newtype OffsetFetchResponseV1 = OffsetFetchResponseV1
+  { offsetFetchResponseV1Topics :: V.Vector TopicOffsetResponse
   } deriving (Show, Eq, Generic)
 
-makeFields ''OffsetFetchResponseV1
 
 instance Binary OffsetFetchResponseV1 where
   get = (OffsetFetchResponseV1 . fromArray) <$> get
-  put r = putL (topics . to Array) r
+  put = put . Array . offsetFetchResponseV1Topics
 
 instance ByteSize OffsetFetchResponseV1 where
-  byteSize r = byteSizeL topics r
+  byteSize = byteSize . offsetFetchResponseV1Topics
 
 instance RequestApiKey OffsetFetchRequestV0 where
   apiKey = theApiKey 9

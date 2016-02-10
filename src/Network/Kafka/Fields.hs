@@ -1,151 +1,72 @@
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE MultiParamTypeClasses  #-}
+{-# LANGUAGE FlexibleContexts       #-}
+{-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE RankNTypes             #-}
+{-# LANGUAGE TemplateHaskell        #-}
 module Network.Kafka.Fields where
 import Control.Applicative
 import Control.Lens
 import Data.Functor.Contravariant
 import Data.Profunctor
+import Network.Kafka.Primitive.Fetch
+import Network.Kafka.Primitive.GroupCoordinator
+import Network.Kafka.Primitive.Metadata
+import Network.Kafka.Primitive.Offset
+import Network.Kafka.Primitive.OffsetCommit
+import Network.Kafka.Primitive.OffsetFetch
+import Network.Kafka.Primitive.Produce
 
--- Internal id functor.
-newtype Id a = Id { runId :: a }
+makeFields ''FetchResultPartitionResults
+makeFields ''FetchResult
+makeFields ''PartitionFetch
+makeFields ''TopicFetch
+makeFields ''FetchRequestV0
+makeFields ''FetchResponseV0
 
--- | Could use @DeriveFunctor@ here but that's not portable.
-instance Functor Id where fmap f = Id . f . runId
+makeFields ''GroupCoordinatorRequestV0
+makeFields ''GroupCoordinatorResponseV0
 
-{-
-class HasReplicaId s a | s -> a where
-  replicaId :: Lens' s a
+makeFields ''MetadataRequestV0
+makeFields ''Broker
+makeFields ''PartitionMetadata
+makeFields ''TopicMetadata
+makeFields ''MetadataResponseV0
 
-class HasMaxWaitTime s a | s -> a where
-  maxWaitTime :: Lens' s a
+makeFields ''PartitionOffsetRequestInfo
+makeFields ''TopicPartition
+makeFields ''OffsetRequestV0
+makeFields ''PartitionOffset
+makeFields ''PartitionOffsetResponseInfo
+makeFields ''OffsetResponseV0
 
-class HasMinBytes s a | s -> a where
-  minBytes :: Lens' s a
+makeFields ''CommitPartitionV0
+makeFields ''CommitV0
+makeFields ''OffsetCommitRequestV0
+makeFields ''CommitPartitionV1
+makeFields ''CommitV1
+makeFields ''OffsetCommitRequestV1
+makeFields ''CommitPartitionV2
+makeFields ''CommitV2
+makeFields ''OffsetCommitRequestV2
+makeFields ''CommitPartitionResult
+makeFields ''CommitTopicResult
+makeFields ''OffsetCommitResponseV0
+makeFields ''OffsetCommitResponseV1
+makeFields ''OffsetCommitResponseV2
 
-class HasPartition s a | s -> a where
-  partition :: Lens' s a
+makeFields ''PartitionOffsetFetch
+makeFields ''TopicOffsetResponse
+makeFields ''TopicOffset
+makeFields ''OffsetFetchRequestV0
+makeFields ''OffsetFetchResponseV0
+makeFields ''OffsetFetchRequestV1
+makeFields ''OffsetFetchResponseV1
 
-class HasFetchOffset s a | s -> a where
-  fetchOffset :: Lens' s a
+makeFields ''PartitionMessages
+makeFields ''TopicPublish
+makeFields ''ProduceRequestV0
+makeFields ''PublishPartitionResult
+makeFields ''PublishResult
+makeFields ''ProduceResponseV0
 
-class HasMaxBytes s a | s -> a where
-  maxBytes :: Lens' s a
-
-class HasData s a | s -> a where
-  _data :: Lens' s a
-
-class HasErrorCode s a | s -> a where
-  errorCode :: Lens' s a
-
-class HasHighwaterMarkOffset s a | s -> a where
-  highwaterMarkOffset :: Lens' s a
-
-class HasMessageSet s a | s -> a where
-  messageSet :: Lens' s a
-
-class HasTopics s a | s -> a where
-  topics :: Lens' s a
-
-class HasBrokers s a | s -> a where
-  brokers :: Lens' s a
-
-class HasNodeId s a | s -> a where
-  nodeId :: Lens' s a
-
-class HasHost s a | s -> a where
-  host :: Lens' s a
-
-class HasPort s a | s -> a where
-  port :: Lens' s a
-
-class HasPartitionMetadata s a | s -> a where
-  partitionMetadata :: Lens' s a
-
-class HasLeader s a | s -> a where
-  leader :: Lens' s a
-
-class HasReplicas s a | s -> a where
-  replicas :: Lens' s a
-
-class HasIsReplicated s a | s -> a where
-  isReplicated :: Lens' s a
-
-class HasTopic s a | s -> a where
-  topic :: Lens' s a
-
-class HasOffsets s a | s -> a where
-  offsets :: Lens' s a
-
-class HasTime s a | s -> a where
-  time :: Lens' s a
-
-class HasMaxNumberOfOffsets s a | s -> a where
-  maxNumberOfOffsets :: Lens' s a
-
-class HasOffset s a | s -> a where 
-  offset :: Lens' s a
-
-class HasConsumerGroup s a | s -> a where
-  consumerGroup :: Lens' s a
-
-class HasCoordinatorId s a | s -> a where
-  coordinatorId :: Lens' s a
-
-class HasCoordinatorHost s a | s -> a where
-  coordinatorHost :: Lens' s a
-
-class HasCoordinatorPort s a | s -> a where
-  coordinatorPort :: Lens' s a
-
-class HasPartitions s a | s -> a where
-  partitions :: Lens' s a
-
-class HasMessage s a | s -> a where
-  message :: Lens' s a
-
-class HasAttributes s a | s -> a where
-  attributes :: Lens' s a
-
-class HasKey s a | s -> a where
-  key :: Lens' s a
-
-class HasValue s a | s -> a where
-  value :: Lens' s a
-
-class HasMagicByte s a | s -> a where
-  magicByte :: Lens' s a
-
-class HasCommits s a | s -> a where
-  commits :: Lens' s a
-
-class HasMetadata s a | s -> a where
-  metadata :: Lens' s a 
-
-class HasResults s a | s -> a where
-  results :: Lens' s a
-
-class HasTimestamp s a | s -> a where
-  timestamp :: Lens' s a
-
-class HasGeneration s a | s -> a where
-  generation :: Lens' s a
-
-class HasConsumer s a | s -> a where
-  consumer :: Lens' s a
-
-class HasRetentionTime s a | s -> a where
-  retentionTime :: Lens' s a
-
-class HasRequiredAcks s a | s -> a where
-  requiredAcks :: Lens' s a
-
-class HasTimeout s a | s -> a where
-  timeout :: Lens' s a
-
-class HasTopicPublishes s a | s -> a where
-  topicPublishes :: Lens' s a
-
-class HasPartitionResults s a | s -> a where
-  partitionResults :: Lens' s a
--}

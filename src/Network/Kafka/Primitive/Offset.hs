@@ -17,7 +17,6 @@ data PartitionOffsetRequestInfo = PartitionOffsetRequestInfo
   , partitionOffsetRequestInfoMaxNumberOfOffsets :: !Int32
   } deriving (Eq, Show, Generic)
 
-makeFields ''PartitionOffsetRequestInfo
 
 instance Binary PartitionOffsetRequestInfo where
   get = PartitionOffsetRequestInfo <$> get <*> get <*> get
@@ -36,7 +35,6 @@ data TopicPartition = TopicPartition
   , topicPartitionOffsets :: !(V.Vector PartitionOffsetRequestInfo)
   } deriving (Eq, Show, Generic)
 
-makeFields ''TopicPartition
 
 instance Binary TopicPartition where
   get = TopicPartition <$> get <*> (fromFixedArray <$> get)
@@ -59,7 +57,6 @@ instance RequestApiKey OffsetRequestV0 where
 instance RequestApiVersion OffsetRequestV0 where
   apiVersion = const 0
 
-makeFields ''OffsetRequestV0
 
 instance Binary OffsetRequestV0 where
   get = OffsetRequestV0 <$> get <*> (fromArray <$> get)
@@ -77,7 +74,6 @@ data PartitionOffset = PartitionOffset
   , partitionOffsetOffset    :: !Int64
   } deriving (Eq, Show, Generic)
 
-makeFields ''PartitionOffset
 
 instance Binary PartitionOffset where
   get = PartitionOffset <$> get <*> get <*> get
@@ -95,7 +91,6 @@ data PartitionOffsetResponseInfo = PartitionOffsetResponseInfo
   , partitionOffsetResponseInfoOffsets :: !(V.Vector PartitionOffset)
   } deriving (Eq, Show, Generic)
 
-makeFields ''PartitionOffsetResponseInfo
 
 instance Binary PartitionOffsetResponseInfo where
   get = PartitionOffsetResponseInfo <$> get <*> (fromFixedArray <$> get)
@@ -107,11 +102,10 @@ instance ByteSize PartitionOffsetResponseInfo where
                byteSize (partitionOffsetResponseInfoOffsets p)
 
 
-data OffsetResponseV0 = OffsetResponseV0
-  { offsetResponseV0Offsets :: !(V.Vector PartitionOffsetResponseInfo)
+newtype OffsetResponseV0 = OffsetResponseV0
+  { offsetResponseV0Offsets :: V.Vector PartitionOffsetResponseInfo
   } deriving (Eq, Show, Generic)
 
-makeFields ''OffsetResponseV0
 
 instance Binary OffsetResponseV0 where
   get = OffsetResponseV0 <$> (fromArray <$> get)

@@ -5,6 +5,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Main where
 
+import Control.Lens hiding (elements)
 import qualified Data.Binary as B
 import qualified Data.ByteString as BS
 import Data.Int
@@ -12,8 +13,10 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import qualified Data.Vector as V
 import Network.Kafka
+import Network.Kafka.Fields
+import Network.Kafka.Simple
 import Network.Kafka.Protocol
-import Network.Kafka.Primitive.ConsumerMetadata  
+import Network.Kafka.Primitive.GroupCoordinator  
 import Network.Kafka.Primitive.Fetch
 import Network.Kafka.Primitive.Metadata
 import Network.Kafka.Primitive.Offset
@@ -27,13 +30,14 @@ import Test.Tasty.QuickCheck
 import Test.Tasty.HUnit
 
 import Test.QuickCheck.Arbitrary
+import Test.QuickCheck.Gen
 
 instance Arbitrary ErrorCode where
-  arbitrary = elements
+  arbitrary = Test.QuickCheck.Gen.elements
     [ NoError
     , Unknown
     , OffsetOutOfRange
-    , InvalidMessage
+    , CorruptMessage
     , UnknownTopicOrPartition
     , InvalidMessageSize
     , LeaderNotAvailable
@@ -44,9 +48,24 @@ instance Arbitrary ErrorCode where
     , MessageSizeTooLarge
     , StaleControllerEpoch
     , OffsetMetadataTooLarge
-    , OffsetsLoadInProgress
-    , ConsumerCoordinatorNotAvailable
-    , NotCoordinatorForConsumer
+    , GroupLoadInProgress
+    , GroupCoordinatorNotAvailable
+    , NotCoordinatorForGroup
+    , InvalidTopic
+    , RecordListTooLarge
+    , NotEnoughReplicas
+    , NotEnoughReplicasAfterAppend
+    , InvalidRequiredAcks
+    , IllegalGeneration
+    , InconsistentGroupProtocol
+    , InvalidGroupId
+    , UnknownMemberId
+    , InvalidSessionTimeout
+    , RebalanceInProgress
+    , InvalidCommitOffsetSize
+    , TopicAuthorizationFailed
+    , GroupAuthorizationFailed
+    , ClusterAuthorizationFailed
     ]
 
 instance Arbitrary Utf8 where
@@ -64,24 +83,24 @@ instance Arbitrary ConsumerId where
 instance Arbitrary GenerationId where
   arbitrary = GenerationId <$> arbitrary
 
-instance Arbitrary (RequestMessage ConsumerMetadata 0) where
-  arbitrary = ConsumerMetadataRequestV0 <$> arbitrary
+instance Arbitrary GroupCoordinatorRequestV0 where
+  arbitrary = GroupCoordinatorRequestV0 <$> arbitrary
 
-instance Arbitrary (ResponseMessage ConsumerMetadata 0) where
-  arbitrary = ConsumerMetadataResponseV0 <$>
+instance Arbitrary GroupCoordinatorResponseV0 where
+  arbitrary = GroupCoordinatorResponseV0 <$>
               arbitrary <*>
               arbitrary <*>
               arbitrary <*>
               arbitrary
 
-instance Arbitrary (RequestMessage Fetch 0) where
+instance Arbitrary FetchRequestV0 where
   arbitrary = FetchRequestV0 <$>
               arbitrary <*>
               arbitrary <*>
               arbitrary <*>
               arbitrary
 
-instance Arbitrary (ResponseMessage Fetch 0) where
+instance Arbitrary FetchResponseV0 where
   arbitrary = FetchResponseV0 <$>
               arbitrary
 
@@ -118,7 +137,6 @@ instance Arbitrary Message where
   arbitrary = Message <$>
               arbitrary <*>
               arbitrary <*>
-              arbitrary <*>
               arbitrary
 
 instance Arbitrary Attributes where
@@ -136,10 +154,10 @@ instance Arbitrary PartitionId where
 instance Arbitrary Bytes where
   arbitrary = (Bytes . BS.pack) <$> listOf arbitrary
 
-instance Arbitrary (RequestMessage Metadata 0) where
+instance Arbitrary MetadataRequestV0 where
   arbitrary = MetadataRequestV0 <$> arbitrary
 
-instance Arbitrary (ResponseMessage Metadata 0) where
+instance Arbitrary MetadataResponseV0 where
   arbitrary = MetadataResponseV0 <$> arbitrary <*> arbitrary
 
 instance Arbitrary Broker where
@@ -156,12 +174,12 @@ instance Arbitrary PartitionMetadata where
               arbitrary <*>
               arbitrary
 
-instance Arbitrary (RequestMessage Offset 0) where
+instance Arbitrary OffsetRequestV0 where
   arbitrary = OffsetRequestV0 <$>
               arbitrary <*>
               arbitrary
 
-instance Arbitrary (ResponseMessage Offset 0) where
+instance Arbitrary OffsetResponseV0 where
   arbitrary = OffsetResponseV0 <$> arbitrary
 
 instance Arbitrary TopicPartition where
@@ -184,25 +202,25 @@ instance Arbitrary PartitionOffset where
               arbitrary <*>
               arbitrary
 
-instance Arbitrary (RequestMessage OffsetCommit 0) where
+instance Arbitrary OffsetCommitRequestV0 where
   arbitrary = OffsetCommitRequestV0 <$>
               arbitrary <*>
               arbitrary
 
-instance Arbitrary (ResponseMessage OffsetCommit 0) where
+instance Arbitrary OffsetCommitResponseV0 where
   arbitrary = OffsetCommitResponseV0 <$> arbitrary
 
-instance Arbitrary (RequestMessage OffsetCommit 1) where
+instance Arbitrary OffsetCommitRequestV1 where
   arbitrary = OffsetCommitRequestV1 <$>
               arbitrary <*>
               arbitrary <*>
               arbitrary <*>
               arbitrary
 
-instance Arbitrary (ResponseMessage OffsetCommit 1) where
+instance Arbitrary OffsetCommitResponseV1 where
   arbitrary = OffsetCommitResponseV1 <$> arbitrary
 
-instance Arbitrary (RequestMessage OffsetCommit 2) where
+instance Arbitrary OffsetCommitRequestV2 where
   arbitrary = OffsetCommitRequestV2 <$>
               arbitrary <*>
               arbitrary <*>
@@ -210,35 +228,35 @@ instance Arbitrary (RequestMessage OffsetCommit 2) where
               arbitrary <*>
               arbitrary
 
-instance Arbitrary (ResponseMessage OffsetCommit 2) where
+instance Arbitrary OffsetCommitResponseV2 where
   arbitrary = OffsetCommitResponseV2 <$> arbitrary
 
-instance Arbitrary (Commit 0) where
+instance Arbitrary CommitV0 where
   arbitrary = CommitV0 <$> arbitrary <*> arbitrary
 
-instance Arbitrary (CommitPartition 0) where
+instance Arbitrary CommitPartitionV0 where
   arbitrary = CommitPartitionV0 <$>
               arbitrary <*>
               arbitrary <*>
               arbitrary
 
-instance Arbitrary (Commit 1) where
+instance Arbitrary CommitV1 where
   arbitrary = CommitV1 <$> arbitrary <*> arbitrary
 
-instance Arbitrary (Commit 2) where
+instance Arbitrary CommitV2 where
   arbitrary = CommitV2 <$> arbitrary <*> arbitrary
 
 instance Arbitrary CommitTopicResult where
   arbitrary = CommitTopicResult <$> arbitrary <*> arbitrary
 
-instance Arbitrary (CommitPartition 1) where
+instance Arbitrary CommitPartitionV1 where
   arbitrary = CommitPartitionV1 <$>
               arbitrary <*>
               arbitrary <*>
               arbitrary <*>
               arbitrary
 
-instance Arbitrary (CommitPartition 2) where
+instance Arbitrary CommitPartitionV2 where
   arbitrary = CommitPartitionV2 <$>
               arbitrary <*>
               arbitrary <*>
@@ -249,7 +267,7 @@ instance Arbitrary CommitPartitionResult where
               arbitrary <*>
               arbitrary
 
-instance Arbitrary (RequestMessage OffsetFetch 0) where
+instance Arbitrary OffsetFetchRequestV0 where
   arbitrary = OffsetFetchRequestV0 <$>
               arbitrary <*>
               arbitrary
@@ -259,7 +277,7 @@ instance Arbitrary TopicOffset where
               arbitrary <*>
               arbitrary
 
-instance Arbitrary (ResponseMessage OffsetFetch 0) where
+instance Arbitrary OffsetFetchResponseV0 where
   arbitrary = OffsetFetchResponseV0 <$> arbitrary
 
 instance Arbitrary TopicOffsetResponse where
@@ -274,12 +292,12 @@ instance Arbitrary PartitionOffsetFetch where
               arbitrary <*>
               arbitrary
 
-instance Arbitrary (RequestMessage OffsetFetch 1) where
+instance Arbitrary OffsetFetchRequestV1 where
   arbitrary = OffsetFetchRequestV1 <$>
               arbitrary <*>
               arbitrary
 
-instance Arbitrary (ResponseMessage OffsetFetch 1) where
+instance Arbitrary OffsetFetchResponseV1 where
   arbitrary = OffsetFetchResponseV1 <$>
               arbitrary
 
@@ -299,6 +317,7 @@ instance Arbitrary CorrelationId where
   arbitrary = CorrelationId <$> arbitrary
 
 -- produceAndConsume :: IO 
+{-
 produceAndConsume = withKafkaConnection "localhost" "9092" $ \conn -> do
   let r = req (CorrelationId 0) (Utf8 "sample") $ ProduceRequestV0 1 0 $
             V.fromList [ TopicPublish (Utf8 "hs-kafka-test-topic") $
@@ -309,12 +328,44 @@ produceAndConsume = withKafkaConnection "localhost" "9092" $ \conn -> do
                          ]
                        ]
   send conn r
+-}
 
 roundTrip :: (Eq a, B.Binary a) => a -> Bool
 roundTrip x = x == B.decode (B.encode x)
 
 main = defaultMain $ testGroup "Kafka tests"
-  [ testGroup "Roundtrip serialization" 
+  [ {- testGroup "Round trip serialization" 
+    [ testGroup "ConsumerMetadata"
+      [ testProperty "Request V0" $ \x -> roundTrip (x :: GroupCoordinatorRequestV0)
+      , testProperty "Response V0" $ \x -> roundTrip (x :: GroupCoordinatorResponseV0)
+      ]
+    , testGroup "Fetch"
+      [ testProperty "Request V0" $ \x -> roundTrip (x :: FetchRequestV0)
+      , testProperty "Response V0" $ \x -> roundTrip (x :: FetchResponseV0)
+      ]
+    , testGroup "Metadata"
+      [ testProperty "Request V0" $ \x -> roundTrip (x :: MetadataRequestV0)
+      , testProperty "Response V0" $ \x -> roundTrip (x :: MetadataResponseV0)
+      ]
+    , testGroup "Offset"
+      [ testProperty "Request V0" $ \x -> roundTrip (x :: OffsetRequestV0)
+      , testProperty "Response V0" $ \x -> roundTrip (x :: OffsetResponseV0)
+      ]
+    , testGroup "OffsetCommit"
+      [ testProperty "Request V0" $ \x -> roundTrip (x :: OffsetCommitRequestV0)
+      , testProperty "Response V0" $ \x -> roundTrip (x :: OffsetCommitResponseV0)
+      , testProperty "Request V1" $ \x -> roundTrip (x :: OffsetCommitRequestV1)
+      , testProperty "Response V1" $ \x -> roundTrip (x :: OffsetCommitResponseV1)
+      , testProperty "Request V2" $ \x -> roundTrip (x :: OffsetCommitRequestV2)
+      , testProperty "Response V2" $ \x -> roundTrip (x :: OffsetCommitResponseV2)
+      ]
+    , testGroup "OffsetFetch"
+      [ testProperty "Request V0" $ \x -> roundTrip (x :: OffsetFetchRequestV0)
+      , testProperty "Response V0" $ \x -> roundTrip (x :: OffsetFetchResponseV0)
+      , testProperty "Request V1" $ \x -> roundTrip (x :: OffsetFetchRequestV1)
+      , testProperty "Response V1" $ \x -> roundTrip (x :: OffsetFetchResponseV1)
+      ]
+    , testGroup "Support types"
       [ testProperty "Array" $ \x -> roundTrip (x :: Array V.Vector Int16)
       , testProperty "FixedArray" $ \x -> roundTrip (x :: FixedArray V.Vector Int32)
       , testProperty "ErrorCode" $ \x -> roundTrip (x :: ErrorCode)
@@ -327,23 +378,24 @@ main = defaultMain $ testGroup "Kafka tests"
       , testProperty "Utf8" $ \x -> roundTrip (x :: Utf8)
       , testProperty "Bytes" $ \x -> roundTrip (x :: Bytes)
       , testProperty "Attributes" $ \x -> roundTrip (x :: Attributes)
-      , testProperty "RequestMessage ConsumerMetadata 0" $ \x -> roundTrip (x :: RequestMessage ConsumerMetadata 0)
-      , testProperty "ResponseMessage ConsumerMetadata 0" $ \x -> roundTrip (x :: ResponseMessage ConsumerMetadata 0)
-      , testProperty "RequestMessage Fetch 0" $ \x -> roundTrip (x :: RequestMessage Fetch 0)
-      , testProperty "ResponseMessage Fetch 0" $ \x -> roundTrip (x :: ResponseMessage Fetch 0)
-      , testProperty "RequestMessage Metadata 0" $ \x -> roundTrip (x :: RequestMessage Metadata 0)
-      , testProperty "ResponseMessage Metadata 0" $ \x -> roundTrip (x :: ResponseMessage Metadata 0)
-      , testProperty "RequestMessage Offset 0" $ \x -> roundTrip (x :: RequestMessage Offset 0)
-      , testProperty "ResponseMessage Offset 0" $ \x -> roundTrip (x :: ResponseMessage Offset 0)
-      , testProperty "RequestMessage OffsetCommit 0" $ \x -> roundTrip (x :: RequestMessage OffsetCommit 0)
-      , testProperty "ResponseMessage OffsetCommit 0" $ \x -> roundTrip (x :: ResponseMessage OffsetCommit 0)
-      , testProperty "RequestMessage OffsetCommit 1" $ \x -> roundTrip (x :: RequestMessage OffsetCommit 1)
-      , testProperty "ResponseMessage OffsetCommit 1" $ \x -> roundTrip (x :: ResponseMessage OffsetCommit 1)
-      , testProperty "RequestMessage OffsetCommit 2" $ \x -> roundTrip (x :: RequestMessage OffsetCommit 2)
-      , testProperty "ResponseMessage OffsetCommit 2" $ \x -> roundTrip (x :: ResponseMessage OffsetCommit 2)
-      , testProperty "RequestMessage OffsetFetch 0" $ \x -> roundTrip (x :: RequestMessage OffsetFetch 0)
-      , testProperty "ResponseMessage OffsetFetch 0" $ \x -> roundTrip (x :: ResponseMessage OffsetFetch 0)
-      , testProperty "RequestMessage OffsetFetch 1" $ \x -> roundTrip (x :: RequestMessage OffsetFetch 1)
-      , testProperty "ResponseMessage OffsetFetch 1" $ \x -> roundTrip (x :: ResponseMessage OffsetFetch 1)
       ]
+    ]
+  , -}
+  testGroup "Basic requests return properly"
+    [ testCase "groupCoordinator" $ do
+        k <- localKafka $ groupCoordinator "test-group"
+        assertEqual "error code" NoError $ k ^. errorCode
+    {-
+    , testCase "fetch" $ do
+        localKafka
+    , testCase "metadata" $ do
+        localKafka
+    , testCase "offset" $ do
+        localKakfa
+    , testCase "offsetCommit" $ do
+        localKafka
+    , testCase "produce" $ do
+        localKafka
+    -}
+    ]
   ]

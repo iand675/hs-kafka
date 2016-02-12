@@ -42,8 +42,8 @@ fetch fs = do
                                                     (fromIntegral $ c ^. fetchMinBytes)
                                                     fs)
 
-metadata :: V.Vector T.Text -> Kafka MetadataResponseV0
-metadata = internal . MetadataRequestV0 . V.map (Utf8 . T.encodeUtf8)
+metadata :: V.Vector Utf8 -> Kafka MetadataResponseV0
+metadata = internal . MetadataRequestV0
 
 offset :: NodeId -> V.Vector TopicPartition -> Kafka (V.Vector PartitionOffsetResponseInfo)
 offset n ps = offsetResponseV0Offsets <$> internal (OffsetRequestV0 n ps)
@@ -51,8 +51,12 @@ offset n ps = offsetResponseV0Offsets <$> internal (OffsetRequestV0 n ps)
 offsetCommit :: OffsetCommitRequestV2 -> Kafka (V.Vector CommitTopicResult)
 offsetCommit = fmap offsetCommitResponseV2Results . internal
 
-offsetFetch :: OffsetFetchRequestV1 -> Kafka (V.Vector TopicOffsetResponse)
-offsetFetch = fmap offsetFetchResponseV1Topics . internal
+offsetFetch :: T.Text
+            -> V.Vector TopicOffset
+            -> Kafka (V.Vector TopicOffsetResponse)
+offsetFetch cg ts = do
+  let g = Utf8 $ T.encodeUtf8 cg
+  offsetFetchResponseV1Topics <$> internal (OffsetFetchRequestV1 g ts)
 
 produce :: V.Vector TopicPublish -> Kafka (V.Vector PublishResult)
 produce ts = do

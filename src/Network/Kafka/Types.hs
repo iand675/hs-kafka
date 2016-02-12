@@ -20,7 +20,9 @@ import           Data.Binary.Get
 import           Data.Binary.Put
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Lazy as L
 import           Data.Digest.CRC32
+import           Data.Hashable
 import           Data.Int
 import qualified Data.IntMap.Strict as I
 import           Data.IORef
@@ -35,7 +37,7 @@ newtype CorrelationId = CorrelationId { fromCorrelationId :: Int32 }
   deriving (Show, Eq, Ord, Binary, ByteSize)
 
 newtype Utf8 = Utf8 { fromUtf8 :: ByteString }
-  deriving (Show, Eq)
+  deriving (Show, Eq, Hashable)
 
 instance Binary Utf8 where
   get = do
@@ -115,7 +117,7 @@ defaultConfig = KafkaConfig
   , kafkaConfigBufferMemory                     = 33554432
   , kafkaConfigRetries                          = 0
   , kafkaConfigBatchSize                        = 16384
-  , kafkaConfigClientId                         = Utf8 "hi"
+  , kafkaConfigClientId                         = Utf8 "hs-kafka"
   , kafkaConfigGroupId                          = Utf8 ""
   , kafkaConfigClientMaxIdleMs                  = 540000
   , kafkaConfigLingerMs                         = 0
@@ -183,23 +185,23 @@ instance RequestApiKey DescribeGroups where
 instance RequestApiKey ListGroups where
   apiKey = theApiKey 16
 
-newtype Bytes = Bytes { fromBytes :: ByteString }
-  deriving (Show, Eq)
+newtype Bytes = Bytes { fromBytes :: L.ByteString }
+  deriving (Show, Eq, Hashable)
 
 instance Binary Bytes where
   get = do
     len <- fromIntegral <$> getInt32be
     if len == -1
-      then pure $ Bytes BS.empty
-      else Bytes <$> getByteString len
-  put (Bytes bs) = if BS.null bs
+      then pure $ Bytes L.empty
+      else Bytes <$> getLazyByteString len
+  put (Bytes bs) = if L.null bs
     then putInt32be (-1)
     else do
-      putInt32be $ fromIntegral $ BS.length bs
-      putByteString bs
+      putInt32be $ fromIntegral $ L.length bs
+      putLazyByteString bs
 
 instance ByteSize Bytes where
-  byteSize (Bytes bs) = 4 + fromIntegral (BS.length bs)
+  byteSize (Bytes bs) = 4 + fromIntegral (L.length bs)
 
 data Request req = Request
   { requestCorrelationId :: !CorrelationId
@@ -396,14 +398,14 @@ newtype CoordinatorId = CoordinatorId { fromCoordinatorId :: Int32 }
 
 
 newtype NodeId = NodeId { fromNodeId :: Int32 }
-  deriving (Show, Eq, Ord, Binary, ByteSize)
+  deriving (Show, Eq, Ord, Binary, ByteSize, Integral, Enum, Real, Num)
 
 
 newtype PartitionId = PartitionId { fromPartitionId :: Int32 }
   deriving (Show, Eq, Ord, Binary, ByteSize)
 
 newtype ConsumerId = ConsumerId { fromConsumerId :: Utf8 }
-  deriving (Show, Eq, Binary, ByteSize)
+  deriving (Show, Eq, Binary, ByteSize, Hashable)
 
 
 data CompressionCodec = NoCompression
@@ -449,20 +451,23 @@ instance ByteSize Message where
                byteSize (messageValue m)
   {-# INLINE byteSize #-}
 
+-- TODO, make crc checking optional
 instance Binary Message where
   get = do
     crc <- get :: Get Word32
     bsStart <- bytesRead
-    (msg, bsEnd) <- lookAhead $ do
-      get :: Get Int8
-      msg <- Message <$> get <*> get <*> get
-      bsEnd <- bytesRead
-      return (msg, bsEnd)
+    let messageGetter = do
+          get :: Get Int8
+          msg <- Message <$> get <*> get <*> get
+          bsEnd <- bytesRead
+          return (msg, bsEnd)
+    (msg, bsEnd) <- lookAhead messageGetter
     crcChunk <- getByteString $ fromIntegral (bsEnd - bsStart)
     let crcFinal = crc32 crcChunk
     if crcFinal /= crc
       then fail ("Invalid CRC: expected " ++ show crc ++ ", got " ++ show crcFinal)
       else return msg
+
   put p = do
     let rest = runPut $ do
           put (0 :: Int8)
@@ -560,4 +565,12 @@ instance (ByteSize req, RequestApiVersion req) => ByteSize (Request req) where
                byteSize (requestCorrelationId p) +
                byteSize (requestClientId p) +
                byteSize (requestMessage p)
+
+data RecordMetadata = RecordMetadata
+  { recordMetadataOffset    :: Int64
+  , recordMetadataPartition :: PartitionId
+  , recordMetadataTopic     :: Utf8
+  }
+
+makeFields ''RecordMetadata
 

@@ -1,6 +1,10 @@
-flags: {}
+flags:
+  hashable:
+    sse41: true
+
 packages:
 - '.'
 extra-deps:
 - binary-0.8.2.0
+- hashable-1.2.4.0
 resolver: nightly-2015-07-15

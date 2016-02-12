@@ -66,7 +66,8 @@ makePrisms ''ResponsePromise
 
 -- TODO notes about thread safety
 data KafkaConnection = KafkaConnection
-  { kafkaSocket            :: MVar Socket
+  { kafkaConnectionInfo    :: (HostName, ServiceName)
+  , kafkaSocket            :: MVar Socket
   , kafkaLeftovers         :: IORef BS.ByteString
   , kafkaPendingResponses  :: IORef (I.IntMap ResponsePromise)
   , kafkaCorrelationSupply :: IORef Int
@@ -93,7 +94,7 @@ withKafkaConnection h p conf f = connect h p $ \(s, _) -> do
   leftoverRef <- newIORef BS.empty
   cidRef <- newIORef 0
   pendingRef <- newIORef I.empty
-  let conn = KafkaConnection ms leftoverRef pendingRef cidRef
+  let conn = KafkaConnection (h, p) ms leftoverRef pendingRef cidRef
   x <- f conn
   until' (I.null <$> readIORef pendingRef) $ recv conn conf
   return x
@@ -106,7 +107,7 @@ createKafkaConnection h p = do
   pendingRef <- newIORef I.empty
   (s, _) <- connectSock h p
   ms <- newMVar s
-  return $ KafkaConnection ms leftoverRef pendingRef cidRef
+  return $ KafkaConnection (h, p) ms leftoverRef pendingRef cidRef
 
 closeKafkaConnection :: KafkaConnection -> KafkaConfig -> IO ()
 closeKafkaConnection conn conf = do
@@ -241,4 +242,13 @@ sendNoResponse c conf req = do
         put r
   withMVar (kafkaSocket c) $ \sock -> Lazy.send sock putVal
   return correlation
+
+reconnect :: KafkaConnection -> IO ()
+reconnect c = do
+  sock <- takeMVar $ kafkaSocket c
+  closeSock sock
+  let (h, p) = kafkaConnectionInfo c
+  (sock', _) <- connectSock h p
+  atomicModifyIORef (kafkaLeftovers c) $ const ("", ())
+  putMVar (kafkaSocket c) sock'
 

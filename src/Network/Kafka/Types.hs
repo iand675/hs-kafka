@@ -12,9 +12,11 @@
 {-# LANGUAGE UndecidableInstances       #-}
 {-# LANGUAGE OverloadedStrings          #-}
 module Network.Kafka.Types where
+import qualified Codec.Compression.GZip as GZip
 import           Control.Applicative
 import           Control.Lens
 import           Control.Monad
+import           Debug.Trace
 import           Data.Binary
 import           Data.Binary.Get
 import           Data.Binary.Put
@@ -516,9 +518,22 @@ instance ByteSize MessageSet where
   byteSize = sum . map byteSize . messageSetMessages
 
 getMessageSet :: Int32 -> Get MessageSet
-getMessageSet c = fmap (MessageSet . reverse) $ isolate (fromIntegral c) $ go []
+getMessageSet c = fmap (MessageSet . reverse) $ isolate (fromIntegral c) $ go
   where
-    go xs = do
+    go = do
+      rs <- firstPass []
+      case rs of
+        [m] -> case m of
+          -- handle decompression and return inner message set
+          (MessageSetItem _ (Message (Attributes GZip) _ (Bytes v))) ->
+            let decompressed = GZip.decompress v in
+            case runGetOrFail (getMessageSet $ fromIntegral $ L.length decompressed) decompressed of
+              Left (_, _, err) -> fail err
+              -- TODO, double reverse and unwrapping is really gross
+              Right (_, _, MessageSet rs') -> return $ reverse rs'
+          _ -> return rs
+        _ -> return rs
+    firstPass xs = do
       pred <- isEmpty
       if pred
         then return xs
@@ -530,7 +545,7 @@ getMessageSet c = fmap (MessageSet . reverse) $ isolate (fromIntegral c) $ go []
               let rem = c - fromIntegral consumed
               void $ getByteString $ fromIntegral rem
               return xs
-            Just x -> go (x:xs)
+            Just x -> firstPass (x:xs)
 
 putMessageSet :: MessageSet -> Put
 putMessageSet = mapM_ put . messageSetMessages
@@ -566,11 +581,29 @@ instance (ByteSize req, RequestApiVersion req) => ByteSize (Request req) where
                byteSize (requestClientId p) +
                byteSize (requestMessage p)
 
+newMessage :: Message -> MessageSetItem
+newMessage = MessageSetItem 0
+
+uncompressed :: L.ByteString -> L.ByteString -> MessageSetItem
+uncompressed k v = newMessage $ Message (Attributes NoCompression) (Bytes k) (Bytes v)
+
+gzipCompressed :: MessageSet -> MessageSet
+gzipCompressed = MessageSet .
+                 (:[]) .
+                 newMessage .
+                 Message (Attributes GZip) (Bytes "") .
+                 Bytes .
+                 GZip.compress .
+                 runPut .
+                 putMessageSet
+
+snappyCompressed :: L.ByteString -> L.ByteString -> Message
+snappyCompressed k v = error "Not implemented"
+
 data RecordMetadata = RecordMetadata
   { recordMetadataOffset    :: Int64
   , recordMetadataPartition :: PartitionId
   , recordMetadataTopic     :: Utf8
-  }
+  } deriving (Show, Eq, Generic)
 
 makeFields ''RecordMetadata
-

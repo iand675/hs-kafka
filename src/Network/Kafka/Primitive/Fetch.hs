@@ -24,8 +24,8 @@ instance ByteSize FetchResultPartitionResults where
   byteSize r = byteSize (fetchResultPartitionResultsPartition r) +
                byteSize (fetchResultPartitionResultsErrorCode r) +
                byteSize (fetchResultPartitionResultsHighwaterMarkOffset r) +
-               byteSize (byteSize $ fetchResultPartitionResultsMessageSet r) +
-               byteSize (fetchResultPartitionResultsMessageSet r)
+               byteSize (0 :: Int32) +
+               messageSetByteSize (fetchResultPartitionResultsMessageSet r)
 
 instance Binary FetchResultPartitionResults where
   get = label "fetch result partition results" $ do
@@ -40,8 +40,7 @@ instance Binary FetchResultPartitionResults where
     put $ fetchResultPartitionResultsPartition r
     put $ fetchResultPartitionResultsErrorCode r
     put $ fetchResultPartitionResultsHighwaterMarkOffset r
-    let c = sum $ map byteSize $ messageSetMessages $ fetchResultPartitionResultsMessageSet r
-    put (c :: Int32)
+    put $ messageSetByteSize $ fetchResultPartitionResultsMessageSet r
     putMessageSet $ fetchResultPartitionResultsMessageSet r
  
 data FetchResult = FetchResult

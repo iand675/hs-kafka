@@ -508,17 +508,13 @@ instance ByteSize MessageSetItem where
                byteSize (messageSetItemMessage m)
   {-# INLINE byteSize #-}
 
-newtype MessageSet = MessageSet
-  { messageSetMessages :: [MessageSetItem]
-  } deriving (Show, Eq)
+type MessageSet = [MessageSetItem]
 
-makeFields ''MessageSet
-
-instance ByteSize MessageSet where
-  byteSize = sum . map byteSize . messageSetMessages
+messageSetByteSize :: MessageSet -> Int32
+messageSetByteSize = sum . map byteSize
 
 getMessageSet :: Int32 -> Get MessageSet
-getMessageSet c = fmap (MessageSet . reverse) $ isolate (fromIntegral c) $ go
+getMessageSet c = fmap reverse $ isolate (fromIntegral c) $ go
   where
     go = do
       rs <- firstPass []
@@ -530,7 +526,7 @@ getMessageSet c = fmap (MessageSet . reverse) $ isolate (fromIntegral c) $ go
             case runGetOrFail (getMessageSet $ fromIntegral $ L.length decompressed) decompressed of
               Left (_, _, err) -> fail err
               -- TODO, double reverse and unwrapping is really gross
-              Right (_, _, MessageSet rs') -> return $ reverse rs'
+              Right (_, _, rs') -> return $ reverse rs'
           _ -> return rs
         _ -> return rs
     firstPass xs = do
@@ -548,7 +544,7 @@ getMessageSet c = fmap (MessageSet . reverse) $ isolate (fromIntegral c) $ go
             Just x -> firstPass (x:xs)
 
 putMessageSet :: MessageSet -> Put
-putMessageSet = mapM_ put . messageSetMessages
+putMessageSet = mapM_ put 
 
 
 newtype GenerationId = GenerationId Int32
@@ -588,8 +584,7 @@ uncompressed :: L.ByteString -> L.ByteString -> MessageSetItem
 uncompressed k v = newMessage $ Message (Attributes NoCompression) (Bytes k) (Bytes v)
 
 gzipCompressed :: MessageSet -> MessageSet
-gzipCompressed = MessageSet .
-                 (:[]) .
+gzipCompressed = (:[]) .
                  newMessage .
                  Message (Attributes GZip) (Bytes "") .
                  Bytes .

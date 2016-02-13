@@ -26,13 +26,13 @@ instance Binary PartitionMessages where
     return $ PartitionMessages pid msgs
   put p = do
     put $ partitionMessagesPartition p
-    put $ byteSize $ partitionMessagesMessageSet p
+    put $ messageSetByteSize $ partitionMessagesMessageSet p
     putMessageSet $ partitionMessagesMessageSet p
 
 instance ByteSize PartitionMessages where
   byteSize p = byteSize (partitionMessagesPartition p) +
                4 +
-               byteSize (partitionMessagesMessageSet p)
+               messageSetByteSize (partitionMessagesMessageSet p)
 
 
 data TopicPublish = TopicPublish

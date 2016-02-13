@@ -102,12 +102,16 @@ sendTo p t pid k v = do
     go conn = do
       -- TODO, support batch message sending
       let m = Message (Attributes NoCompression) (Bytes $ producerKeySerializer p k) (Bytes $ producerValueSerializer p v)
-          ms = MessageSet [ MessageSetItem 0 m ]
-      result <- runKafka (KafkaContext conn $ kafkaClientConfig client)
-                  $ produce $ V.singleton $ TopicPublish t $ V.singleton
-                  $ PartitionMessages pid ms
-      print result
-      return undefined
+          ms = [ MessageSetItem 0 m ]
+      -- TODO, another unsafeInterleaveIO here to return the 
+      r <- runKafka (KafkaContext conn $ kafkaClientConfig client)
+                $ produce $ V.singleton $ TopicPublish t $ V.singleton
+                $ PartitionMessages pid ms
+      unsafeInterleaveIO $ do
+        -- TODO replace with implementation that supports batched sending
+        let mc = return $ maybe 0 id $ r ^? traverse . F.partitionResults . traverse . F.offset
+        commitId <- mc
+        return $ RecordMetadata commitId pid t
 
 
 type Partitioner k = (k -> Int32 -> IO PartitionId)

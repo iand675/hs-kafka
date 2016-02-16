@@ -17,18 +17,23 @@ build-type:          Simple
 cabal-version:       >=1.10
 
 library
-  exposed-modules:     Network.Kafka.Simple,
-                       Network.Kafka.Client,
-                       Network.Kafka.Exports,
-                       Network.Kafka.Fields,
-                       Network.Kafka.Protocol,
-                       Network.Kafka.Primitive.Fetch,
-                       Network.Kafka.Primitive.Metadata,
-                       Network.Kafka.Primitive.GroupCoordinator,
-                       Network.Kafka.Primitive.Offset,
-                       Network.Kafka.Primitive.OffsetCommit,
-                       Network.Kafka.Primitive.OffsetFetch,
-                       Network.Kafka.Primitive.Produce,
+  exposed-modules:     Network.Kafka
+                       Network.Kafka.Primitive
+                       Network.Kafka.Internal.Client
+                       Network.Kafka.Internal.Connection
+                       Network.Kafka.Consumer
+                       Network.Kafka.Exports
+                       Network.Kafka.Fields
+                       Network.Kafka.Partitioner
+                       Network.Kafka.Protocol
+                       Network.Kafka.Producer
+                       Network.Kafka.Primitive.Fetch
+                       Network.Kafka.Primitive.Metadata
+                       Network.Kafka.Primitive.GroupCoordinator
+                       Network.Kafka.Primitive.Offset
+                       Network.Kafka.Primitive.OffsetCommit
+                       Network.Kafka.Primitive.OffsetFetch
+                       Network.Kafka.Primitive.Produce
                        Network.Kafka.Types
 
   -- other-modules:       

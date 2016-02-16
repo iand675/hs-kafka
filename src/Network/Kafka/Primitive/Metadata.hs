@@ -97,7 +97,6 @@ data MetadataResponseV0 = MetadataResponseV0
   , metadataResponseV0Topics  :: !(V.Vector TopicMetadata)
   } deriving (Eq, Show, Generic)
 
-
 instance Binary MetadataResponseV0 where
   get = MetadataResponseV0 <$> (fromArray <$> get) <*> (fromArray <$> get)
   put m = do

@@ -5,7 +5,7 @@
 {-# LANGUAGE FlexibleContexts       #-}
 {-# LANGUAGE TypeSynonymInstances   #-}
 {-# LANGUAGE FlexibleInstances      #-}
-module Network.Kafka.Client where
+module Network.Kafka.Internal.Client where
 
 import Control.Arrow
 import Control.Exception
@@ -20,12 +20,10 @@ import Data.Text.Encoding (encodeUtf8, decodeUtf8)
 import qualified Data.Vector as V
 import qualified Network.Kafka.Fields as K
 import Network.Kafka.Protocol
+import Network.Kafka.Primitive
 import Network.Kafka.Primitive.Metadata
 import Network.Kafka.Types
-import Network.Kafka.Simple
 import Network.Simple.TCP
-
-type TrackedTopic = ()
 
 data KafkaClientState = KafkaClientState
   { kafkaClientStateBootstrapServers :: V.Vector (HostName, ServiceName)
@@ -75,7 +73,7 @@ refreshMetadata :: KafkaClient -> IO ()
 refreshMetadata client = do
   st <- readClientState client
   let ctxt = KafkaContext (st ^. bootstrappedConn . _3) (kafkaClientConfig client)
-  meta <- runKafka ctxt $ metadata $ V.fromList $ S.toList $ view trackedTopics st
+  meta <- metadata ctxt $ V.fromList $ S.toList $ view trackedTopics st
   let brokerMap = I.fromList $ V.toList $ V.map (fromIntegral . brokerNodeId &&& id) $ meta ^. K.brokers
   let topicMap = H.fromList $ V.toList $ V.map (topicMetadataTopic &&& id) $ meta ^. K.topics
   atomicModifyIORef' (kafkaClientState client) $ \st -> (st & nodesById .~ brokerMap
@@ -110,14 +108,13 @@ connectionForNode c n = do
   st <- readClientState c
   let i = fromIntegral n
   case st ^. connections . at i of
-    Nothing -> do
-      case st ^. nodesById . at i of
-        -- TODO do node ids change?
-        Nothing -> error "Unrecognized node"
-        Just b -> do
-          conn <- createKafkaConnection (T.unpack $ decodeUtf8 $ fromUtf8 $ b ^. K.host) (show $ b ^. K.port)
-          atomicModifyIORef (kafkaClientState c) $ \st' -> (st' & connections %~ I.insert i conn, ())
-          return conn
+    Nothing -> case st ^. nodesById . at i of
+      -- TODO do node ids change?
+      Nothing -> error "Unrecognized node"
+      Just b -> do
+        conn <- createKafkaConnection (T.unpack $ decodeUtf8 $ fromUtf8 $ b ^. K.host) (show $ b ^. K.port)
+        atomicModifyIORef (kafkaClientState c) $ \st' -> (st' & connections %~ I.insert i conn, ())
+        return conn
     Just c -> do
       -- TODO, check if socket closed?
       return c

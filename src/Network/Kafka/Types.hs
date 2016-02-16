@@ -146,13 +146,6 @@ defaultConfig = KafkaConfig
 putL :: Binary a => Getter s a -> s -> Put
 putL l = put . view l
 
-data Produce
-data Fetch
-data Offset
-data Metadata
-data OffsetCommit
-data OffsetFetch
-data GroupCoordinator
 data JoinGroup
 data Heartbeat
 data LeaveGroup

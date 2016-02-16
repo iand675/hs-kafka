@@ -81,9 +81,6 @@ data KafkaContext = KafkaContext
   , kafkaContextConfig     :: !KafkaConfig
   }
 
-newtype Kafka a = Kafka (StateT KafkaContext IO a)
-  deriving (Functor, Applicative, Monad)
-
 nextCorrelationId :: KafkaConnection -> IO CorrelationId
 nextCorrelationId c = atomicModifyIORef'
   (kafkaCorrelationSupply c)

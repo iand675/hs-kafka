@@ -577,9 +577,10 @@ uncompressed :: L.ByteString -> L.ByteString -> MessageSetItem
 uncompressed k v = newMessage $ Message (Attributes NoCompression) (Bytes k) (Bytes v)
 
 gzipCompressed :: MessageSet -> MessageSet
-gzipCompressed = (:[]) .
-                 newMessage .
-                 Message (Attributes GZip) (Bytes "") .
+gzipCompressed = (:[]) .  newMessage . gzippedMessage
+
+gzippedMessage :: MessageSet -> Message
+gzippedMessage = Message (Attributes GZip) (Bytes "") .
                  Bytes .
                  GZip.compress .
                  runPut .

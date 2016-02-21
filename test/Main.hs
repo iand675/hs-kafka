@@ -133,17 +133,23 @@ instance Arbitrary FetchResultPartitionResults where
 instance Arbitrary MessageSetItem where
   arbitrary = MessageSetItem <$> arbitrary <*> arbitrary
 
+uncompressedMessageGen :: Gen MessageSetItem
+uncompressedMessageGen = MessageSetItem <$> arbitrary <*> (Message (Attributes NoCompression) <$> arbitrary <*> arbitrary)
+
 instance Arbitrary Message where
-  arbitrary = Message <$>
-              arbitrary <*>
-              arbitrary <*>
-              arbitrary
+  arbitrary = do
+    attrs@(Attributes codec) <- arbitrary
+    case codec of
+      NoCompression -> Message attrs <$> arbitrary <*> arbitrary
+      GZip -> gzippedMessage <$> listOf uncompressedMessageGen
+      Snappy -> error "Not supported yet"
 
 instance Arbitrary Attributes where
   arbitrary = Attributes <$> arbitrary
 
 instance Arbitrary CompressionCodec where
-  arbitrary = elements [NoCompression, GZip, Snappy]
+  -- TODO, support snappy
+  arbitrary = elements [NoCompression, GZip {-, Snappy -}]
 
 instance Arbitrary a => Arbitrary (V.Vector a) where
   arbitrary = V.fromList <$> listOf arbitrary
@@ -316,6 +322,24 @@ instance Arbitrary ApiVersion where
 instance Arbitrary CorrelationId where
   arbitrary = CorrelationId <$> arbitrary
 
+instance Arbitrary TopicPublish where
+  arbitrary = TopicPublish <$> arbitrary <*> arbitrary
+
+instance Arbitrary PublishResult where
+  arbitrary = PublishResult <$> arbitrary <*> arbitrary
+
+instance Arbitrary PartitionMessages where
+  arbitrary = PartitionMessages <$> arbitrary <*> arbitrary
+
+instance Arbitrary PublishPartitionResult where
+  arbitrary = PublishPartitionResult <$> arbitrary <*> arbitrary <*> arbitrary
+
+instance Arbitrary ProduceRequestV0 where
+  arbitrary = ProduceRequestV0 <$> arbitrary <*> arbitrary <*> arbitrary
+
+instance Arbitrary ProduceResponseV0 where
+  arbitrary = ProduceResponseV0 <$> arbitrary
+
 -- produceAndConsume :: IO 
 {-
 produceAndConsume = withKafkaConnection "localhost" "9092" $ \conn -> do
@@ -364,6 +388,10 @@ main = defaultMain $ testGroup "Kafka tests"
       , testProperty "Response V0" $ \x -> roundTrip (x :: OffsetFetchResponseV0)
       , testProperty "Request V1" $ \x -> roundTrip (x :: OffsetFetchRequestV1)
       , testProperty "Response V1" $ \x -> roundTrip (x :: OffsetFetchResponseV1)
+      ]
+    , testGroup "Produce"
+      [ testProperty "Request V0" $ \x -> roundTrip (x :: ProduceRequestV0)
+      , testProperty "Response V0" $ \x -> roundTrip (x :: ProduceResponseV0)
       ]
     , testGroup "Support types"
       [ testProperty "Array" $ \x -> roundTrip (x :: Array V.Vector Int16)

@@ -13,11 +13,12 @@ import qualified Data.HashMap.Strict as H
 import           Data.IORef
 import qualified Data.Text.Encoding as T
 import qualified Data.Vector as V
-import           Network.Kafka.Protocol (KafkaContext(..))
+import           Network.Kafka.Protocol
 import           Network.Kafka.Primitive
 import           Network.Kafka.Primitive.Produce
 import qualified Network.Kafka.Fields as F
 import           Network.Kafka.Internal.Client
+import           Network.Kafka.Internal.Connection (KafkaContext(..))
 import           Network.Kafka.Partitioner
 import           Network.Kafka.Types
 import           System.IO.Unsafe

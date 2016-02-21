@@ -19,6 +19,7 @@ import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8, decodeUtf8)
 import qualified Data.Vector as V
 import qualified Network.Kafka.Fields as K
+import Network.Kafka.Internal.Connection
 import Network.Kafka.Protocol
 import Network.Kafka.Primitive
 import Network.Kafka.Primitive.Metadata

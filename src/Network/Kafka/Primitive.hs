@@ -30,10 +30,6 @@ import Network.Kafka.Primitive.OffsetFetch
 import Network.Kafka.Primitive.Produce
 import Network.Kafka.Types hiding (offset)
 
-localKafka :: (KafkaContext -> IO a) -> IO a
-localKafka f = withKafkaConnection "localhost" "9092" defaultConfig $ \c ->
-  f (KafkaContext c defaultConfig)
-
 internal :: KafkaAction req resp => KafkaContext -> req -> IO resp
 internal c = send (kafkaContextConnection c) (kafkaContextConfig c)
 

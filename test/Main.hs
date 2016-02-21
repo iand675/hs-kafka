@@ -381,7 +381,13 @@ main = defaultMain $ testGroup "Kafka tests"
       ]
     ]
   , -}
-  testGroup "Basic requests return properly"
+    testGroup "Connection" 
+    [ "connection open"
+    , "connection close"
+    , "connection queues requests"
+    , "demand result flushes queue"
+    ]
+  , testGroup "Basic requests return properly"
     [ testCase "groupCoordinator" $ do
         k <- localKafka $ groupCoordinator "test-group"
         assertEqual "error code" NoError $ k ^. errorCode
@@ -398,4 +404,9 @@ main = defaultMain $ testGroup "Kafka tests"
         localKafka
     -}
     ]
+  , testGroup "Client" []
+  , testGroup "Producer" []
+  , testGroup "Consumer" []
   ]
+
+

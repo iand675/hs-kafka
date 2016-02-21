@@ -13,6 +13,7 @@ module Network.Kafka.Internal.Connection (
   nextCorrelationId,
   -- withKafkaConnection,
   createKafkaConnection,
+  createKafkaConnection',
   closeKafkaConnection,
   requestFulfiller,
   streamGet,
@@ -20,7 +21,10 @@ module Network.Kafka.Internal.Connection (
   send,
   sendNoResponse,
   reconnect,
-  KafkaAction(..)
+  KafkaAction(..),
+  Transport(..),
+  socketTransport,
+  mockTransport
 ) where
 import           Control.Arrow
 import           Control.Concurrent.MVar
@@ -145,11 +149,15 @@ withKafkaConnection h p conf f = connect h p $ \(s, _) -> do
 
 createKafkaConnection :: HostName -> ServiceName -> IO KafkaConnection
 createKafkaConnection h p = do
+  s <- socketTransport h p
+  createKafkaConnection' h p s
+
+createKafkaConnection' :: HostName -> ServiceName -> Transport -> IO KafkaConnection
+createKafkaConnection' h p t = do
   leftoverRef <- newIORef BS.empty
   cidRef <- newIORef 0
   pendingRef <- newIORef I.empty
-  s <- socketTransport h p
-  ms <- newMVar s
+  ms <- newMVar t
   return $ KafkaConnection (h, p) ms leftoverRef pendingRef cidRef
 
 closeKafkaConnection :: KafkaConnection -> KafkaConfig -> IO ()

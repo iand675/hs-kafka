@@ -8,13 +8,14 @@ module Main where
 import Control.Lens hiding (elements)
 import qualified Data.Binary as B
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Lazy as BL
 import Data.Int
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import qualified Data.Vector as V
 import Network.Kafka
 import Network.Kafka.Fields
-import Network.Kafka.Simple
+import Network.Kafka.Producer
 import Network.Kafka.Protocol
 import Network.Kafka.Primitive.GroupCoordinator  
 import Network.Kafka.Primitive.Fetch
@@ -31,6 +32,8 @@ import Test.Tasty.HUnit
 
 import Test.QuickCheck.Arbitrary
 import Test.QuickCheck.Gen
+
+import ConnectionTests
 
 instance Arbitrary ErrorCode where
   arbitrary = Test.QuickCheck.Gen.elements
@@ -127,9 +130,6 @@ instance Arbitrary FetchResultPartitionResults where
               arbitrary <*>
               arbitrary
 
-instance Arbitrary MessageSet where
-  arbitrary = MessageSet <$> arbitrary
-
 instance Arbitrary MessageSetItem where
   arbitrary = MessageSetItem <$> arbitrary <*> arbitrary
 
@@ -152,7 +152,7 @@ instance Arbitrary PartitionId where
   arbitrary = PartitionId <$> arbitrary
 
 instance Arbitrary Bytes where
-  arbitrary = (Bytes . BS.pack) <$> listOf arbitrary
+  arbitrary = (Bytes . BL.pack) <$> listOf arbitrary
 
 instance Arbitrary MetadataRequestV0 where
   arbitrary = MetadataRequestV0 <$> arbitrary
@@ -334,7 +334,7 @@ roundTrip :: (Eq a, B.Binary a) => a -> Bool
 roundTrip x = x == B.decode (B.encode x)
 
 main = defaultMain $ testGroup "Kafka tests"
-  [ {- testGroup "Round trip serialization" 
+  [ testGroup "Round trip serialization" 
     [ testGroup "ConsumerMetadata"
       [ testProperty "Request V0" $ \x -> roundTrip (x :: GroupCoordinatorRequestV0)
       , testProperty "Response V0" $ \x -> roundTrip (x :: GroupCoordinatorResponseV0)
@@ -380,7 +380,9 @@ main = defaultMain $ testGroup "Kafka tests"
       , testProperty "Attributes" $ \x -> roundTrip (x :: Attributes)
       ]
     ]
-  , -}
+  , connectionTests
+  ]
+{-
     testGroup "Connection" 
     [ "connection open"
     , "connection close"
@@ -408,5 +410,5 @@ main = defaultMain $ testGroup "Kafka tests"
   , testGroup "Producer" []
   , testGroup "Consumer" []
   ]
-
+-}
 

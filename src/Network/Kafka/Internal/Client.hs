@@ -119,3 +119,6 @@ connectionForNode c n = do
     Just c -> do
       -- TODO, check if socket closed?
       return c
+
+withKafkaClient :: KafkaConfig -> (KafkaClient -> IO a) -> IO a
+withKafkaClient conf = bracket (kafkaClient conf) close

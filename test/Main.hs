@@ -14,6 +14,7 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import qualified Data.Vector as V
 import Network.Kafka
+import Network.Kafka.Exports
 import Network.Kafka.Fields
 import Network.Kafka.Producer
 import Network.Kafka.Protocol
@@ -354,12 +355,36 @@ produceAndConsume = withKafkaConnection "localhost" "9092" $ \conn -> do
   send conn r
 -}
 
-roundTrip :: (Eq a, B.Binary a) => a -> Bool
-roundTrip x = x == B.decode (B.encode x)
+roundTrip' :: B.Binary a => a -> a
+roundTrip' = B.decode . B.encode
+
+roundTrip :: (Eq a, B.Binary a, ByteSize a) => a -> Bool
+roundTrip x = x == decoded && fromIntegral (byteSize x) == BL.length encoded
+  where
+    encoded = B.encode x
+    decoded = B.decode encoded
+
+supportTypeTests :: TestTree
+supportTypeTests = testGroup "Support types"
+  [ testProperty "PartitionMessages" $ \x -> roundTrip (x :: PartitionMessages)
+  , testProperty "Array" $ \x -> roundTrip (x :: Array V.Vector Int16)
+  , testProperty "FixedArray" $ \x -> roundTrip (x :: FixedArray V.Vector Int32)
+  , testProperty "ErrorCode" $ \x -> roundTrip (x :: ErrorCode)
+  , testProperty "ApiKey" $ \x -> roundTrip (x :: ApiKey)
+  , testProperty "ApiVersion" $ \x -> roundTrip (x :: ApiVersion)
+  , testProperty "CorrelationId" $ \x -> roundTrip (x :: CorrelationId)
+  , testProperty "CoordinatorId" $ \x -> roundTrip (x :: CoordinatorId)
+  , testProperty "NodeId" $ \x -> roundTrip (x :: NodeId)
+  , testProperty "PartitionId" $ \x -> roundTrip (x :: PartitionId)
+  , testProperty "Utf8" $ \x -> roundTrip (x :: Utf8)
+  , testProperty "Bytes" $ \x -> roundTrip (x :: Bytes)
+  , testProperty "Attributes" $ \x -> roundTrip (x :: Attributes)
+  ]
 
 main = defaultMain $ testGroup "Kafka tests"
   [ testGroup "Round trip serialization" 
-    [ testGroup "ConsumerMetadata"
+    [ supportTypeTests
+    , testGroup "ConsumerMetadata"
       [ testProperty "Request V0" $ \x -> roundTrip (x :: GroupCoordinatorRequestV0)
       , testProperty "Response V0" $ \x -> roundTrip (x :: GroupCoordinatorResponseV0)
       ]
@@ -392,20 +417,6 @@ main = defaultMain $ testGroup "Kafka tests"
     , testGroup "Produce"
       [ testProperty "Request V0" $ \x -> roundTrip (x :: ProduceRequestV0)
       , testProperty "Response V0" $ \x -> roundTrip (x :: ProduceResponseV0)
-      ]
-    , testGroup "Support types"
-      [ testProperty "Array" $ \x -> roundTrip (x :: Array V.Vector Int16)
-      , testProperty "FixedArray" $ \x -> roundTrip (x :: FixedArray V.Vector Int32)
-      , testProperty "ErrorCode" $ \x -> roundTrip (x :: ErrorCode)
-      , testProperty "ApiKey" $ \x -> roundTrip (x :: ApiKey)
-      , testProperty "ApiVersion" $ \x -> roundTrip (x :: ApiVersion)
-      , testProperty "CorrelationId" $ \x -> roundTrip (x :: CorrelationId)
-      , testProperty "CoordinatorId" $ \x -> roundTrip (x :: CoordinatorId)
-      , testProperty "NodeId" $ \x -> roundTrip (x :: NodeId)
-      , testProperty "PartitionId" $ \x -> roundTrip (x :: PartitionId)
-      , testProperty "Utf8" $ \x -> roundTrip (x :: Utf8)
-      , testProperty "Bytes" $ \x -> roundTrip (x :: Bytes)
-      , testProperty "Attributes" $ \x -> roundTrip (x :: Attributes)
       ]
     ]
   , connectionTests
